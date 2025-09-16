@@ -51,7 +51,7 @@
 
 ### `JimengSeedream4`
 * **功能**: 高级文生图/图生图，支持组图模式。
-* **输入**: `client`, `prompt`, `size`, `seed`, `images` (可选参考图), `sequential_image_generation` (组图开关), `max_images` (组图数量)。
+* **输入**: `client`, `prompt`, `size`, `seed`, `images` (可选参考图)。
 * **输出**: `images` (单张或多张图片), `seed`。
 
 ### `JimengImage2Video (I2V)`
