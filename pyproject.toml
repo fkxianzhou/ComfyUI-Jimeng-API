@@ -11,5 +11,5 @@ Repository = "https://github.com/fkxianzhou/ComfyUI-Jimeng-API"
 
 [tool.comfy]
 PublisherId = "fkxianzhou"
-DisplayName = "ComfyUI-Jimeng"
+DisplayName = "ComfyUI-Jimeng-API"
 Icon = ""
