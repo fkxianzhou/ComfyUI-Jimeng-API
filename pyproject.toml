@@ -3,7 +3,7 @@ name = "jimengAPI"
 description = "ComfyUI nodes for Volcano Ark (Jimeng) API"
 version = "1.0.0"
 license = {file = "LICENSE"}
-dependencies = ["volcengine-python-sdk[ark]"]
+dependencies = ["volcengine-python-sdk[ark]", "openai"]
 
 [project.urls]
 Repository = "https://github.com/fkxianzhou/ComfyUI-Jimeng-API"
