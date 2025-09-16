@@ -1,0 +1,15 @@
+[project]
+name = "jimengAPI"
+description = "Enhanced ComfyUI nodes for Volcano Ark (Jimeng) API, supporting Text-to-Image, multiple Image-to-Video modes, and robust task status checking."
+version = "1.1.0"
+license = {file = "LICENSE"}
+dependencies = ["volcengine-python-sdk[ark]"]
+
+[project.urls]
+Repository = "https://github.com/fkxianzhou/ComfyUI-Jimeng-API"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "fkxianzhou"
+DisplayName = "ComfyUI-Jimeng"
+Icon = ""
