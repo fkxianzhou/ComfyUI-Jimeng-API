@@ -1,1 +1,2 @@
 volcengine-python-sdk[ark]
+openai
