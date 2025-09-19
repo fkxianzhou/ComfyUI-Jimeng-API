@@ -198,22 +198,21 @@ class JimengSeedream4:
 
 class JimengVideoGeneration:
     """节点功能：根据文本或图片输入生成视频，并直接预览结果。"""
+    ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
         return { 
             "required": { 
                 "client": ("JIMENG_ARK_CLIENT",),
-                "model": (["doubao-seedance-1-0-lite-i2v-250428", "doubao-seedance-1-0-pro-250528"], {"default": "doubao-seedance-1-0-pro-250528"}), 
+                "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}), 
                 "prompt": ("STRING", {"multiline": True, "default": ""}), 
                 "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
                 "resolution": (["480p", "720p", "1080p"], {"default": "720p"}), 
+                "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
                 "camerafixed": ("BOOLEAN", {"default": True}), 
                 "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
             },
-            "optional": {
-                # 图片输入变为可选
-                "image": ("IMAGE",),
-            } 
+            "optional": { "image": ("IMAGE",), } 
         }
     RETURN_TYPES = ()
     RETURN_NAMES = ()
@@ -221,30 +220,35 @@ class JimengVideoGeneration:
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model, prompt, duration, resolution, camerafixed, seed, image=None):
-        _raise_if_text_params(prompt, ["resolution", "dur", "camerafixed", "seed"])
-        actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
-        prompt_string = f"{prompt} --resolution {resolution} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None):
+        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
         
-        # 根据是否存在 image 输入，来构建不同的 content 列表
+        final_model_name = ""
+        if model_choice == "doubao-seedance-1-0-pro":
+            final_model_name = "doubao-seedance-1-0-pro-250528"
+        elif model_choice == "doubao-seedance-1-0-lite":
+            if image is None: final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
+            else: final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
+        
+        actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
+        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
+        
         content = [{"type": "text", "text": prompt_string}]
         if image is not None:
-            # 图生视频模式
             base64_str = _image_to_base64(image)
             data_url = f"data:image/jpeg;base64,{base64_str}"
             content.append({"type": "image_url", "image_url": {"url": data_url}, "role": "first_frame"})
-        # else: 文生视频模式，content 列表保持原样即可
 
         async with aiohttp.ClientSession() as session:
             try:
-                create_result = await asyncio.to_thread(client.content_generation.tasks.create, model=model, content=content)
+                create_result = await asyncio.to_thread(client.content_generation.tasks.create, model=final_model_name, content=content)
                 task_id = create_result.id
             except Exception as e: 
                 raise RuntimeError(f"创建任务失败: {e}")
             try:
                 final_result = await _poll_task_until_completion_async(client, task_id)
                 video_url = final_result.content.video_url
-                filename_prefix = "Jimeng_V2V" if image is None else "Jimeng_I2V"
+                filename_prefix = "Jimeng_T2V" if image is None else "Jimeng_I2V"
                 return await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed)
             except (RuntimeError, TimeoutError) as e:
                 print(e)
@@ -252,21 +256,33 @@ class JimengVideoGeneration:
 
 class JimengFirstLastFrame2Video:
     """节点功能：根据首尾两帧图片生成过渡视频，并直接预览。"""
+    ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_ARK_CLIENT",), "first_frame_image": ("IMAGE",), "last_frame_image": ("IMAGE",), "model": (["doubao-seedance-1-0-lite-i2v-250428"],), "prompt": ("STRING", {"multiline": True, "default": ""}), "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), "resolution": (["480p", "720p"], {"default": "720p"}), "camerafixed": ("BOOLEAN", {"default": True}), "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), }, }
+        return { "required": { 
+            "client": ("JIMENG_ARK_CLIENT",), 
+            "first_frame_image": ("IMAGE",), 
+            "last_frame_image": ("IMAGE",), 
+            "model": (["doubao-seedance-1-0-lite-i2v-250428"],), 
+            "prompt": ("STRING", {"multiline": True, "default": ""}), 
+            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
+            "resolution": (["480p", "720p", "1080p"], {"default": "720p"}), 
+            "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}), 
+            "camerafixed": ("BOOLEAN", {"default": True}), 
+            "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
+        }, }
     RETURN_TYPES = ()
     RETURN_NAMES = ()
     FUNCTION = "generate"
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, first_frame_image, last_frame_image, model, prompt, duration, resolution, camerafixed, seed):
-        _raise_if_text_params(prompt, ["resolution", "dur", "camerafixed", "seed"])
+    async def generate(self, client, first_frame_image, last_frame_image, model, prompt, duration, resolution, aspect_ratio, camerafixed, seed):
+        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
         first_frame_data_url = f"data:image/jpeg;base64,{_image_to_base64(first_frame_image)}"
         last_frame_data_url = f"data:image/jpeg;base64,{_image_to_base64(last_frame_image)}"
-        prompt_string = f"{prompt} --resolution {resolution} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
+        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
         content = [ {"type": "text", "text": prompt_string}, {"type": "image_url", "image_url": {"url": first_frame_data_url}, "role": "first_frame"}, {"type": "image_url", "image_url": {"url": last_frame_data_url}, "role": "last_frame"} ]
         async with aiohttp.ClientSession() as session:
             try:
@@ -282,20 +298,33 @@ class JimengFirstLastFrame2Video:
 
 class JimengReferenceImage2Video:
     """节点功能：根据一张或多张参考图生成视频，并直接预览。"""
+    ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_ARK_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), "resolution": (["480p", "720p", "1080p"], {"default": "720p"}), "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), }, "optional": { "ref_image_1": ("IMAGE",), "ref_image_2": ("IMAGE",), "ref_image_3": ("IMAGE",), "ref_image_4": ("IMAGE",), } }
+        return { "required": { 
+            "client": ("JIMENG_ARK_CLIENT",), 
+            "prompt": ("STRING", {"multiline": True, "default": ""}), 
+            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
+            "resolution": (["480p", "720p"], {"default": "720p"}), 
+            "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}), 
+            "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
+        }, "optional": { 
+            "ref_image_1": ("IMAGE",), 
+            "ref_image_2": ("IMAGE",), 
+            "ref_image_3": ("IMAGE",), 
+            "ref_image_4": ("IMAGE",), 
+        } }
     RETURN_TYPES = ()
     RETURN_NAMES = ()
     FUNCTION = "generate"
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, duration, resolution, seed, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
-        _raise_if_text_params(prompt, ["resolution", "dur", "seed"])
+    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
+        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "seed"])
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
         model = "doubao-seedance-1-0-lite-i2v-250428"
-        prompt_string = f"{prompt} --resolution {resolution} --dur {duration} --seed {actual_seed}"
+        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} --dur {duration} --seed {actual_seed}"
         content = [{"type": "text", "text": prompt_string}]
         ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
         for img_tensor in ref_images:
