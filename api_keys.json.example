@@ -1,0 +1,10 @@
+[
+  {
+    "customName": "我的即梦Key-1",
+    "apiKey": "volc_key_goes_here"
+  },
+  {
+    "customName": "备用Key",
+    "apiKey": "another_volc_key_goes_here"
+  }
+]

@@ -7,6 +7,7 @@ import random
 import datetime
 import asyncio
 import aiohttp
+import json # 用于处理JSON配置文件
 
 import numpy
 import PIL.Image
@@ -21,10 +22,43 @@ import folder_paths
 # 为所有节点定义一个统一的分类名，方便在ComfyUI菜单中查找。
 GLOBAL_CATEGORY = "JimengAI"
 
-# --- 3. 辅助函数 ---
+# --- 3. 配置文件和辅助函数 ---
+
+# 获取当前文件所在的目录，用于定位配置文件
+jimeng_api_dir = os.path.dirname(os.path.abspath(__file__))
+# 定义配置文件的路径
+API_KEYS_FILE = os.path.join(jimeng_api_dir, "api_keys.json")
+
+# 用于缓存从文件中读取的API密钥
+API_KEYS_CONFIG = []
+
+def load_api_keys():
+    """从 api_keys.json 文件加载API密钥。"""
+    global API_KEYS_CONFIG
+    API_KEYS_CONFIG = [] # 每次加载前先清空
+    if not os.path.exists(API_KEYS_FILE):
+        # 如果文件不存在，提示用户创建
+        print(f"[JimengAI] 提示: 未找到API密钥配置文件。请将 'api_keys.json.example' 重命名为 'api_keys.json' 并填入您的密钥。")
+        return
+
+    try:
+        with open(API_KEYS_FILE, 'r', encoding='utf-8') as f:
+            keys_data = json.load(f)
+            if isinstance(keys_data, list):
+                for item in keys_data:
+                    if "customName" in item and "apiKey" in item:
+                        API_KEYS_CONFIG.append(item)
+            if not API_KEYS_CONFIG:
+                print(f"[JimengAI] 警告: 'api_keys.json' 文件为空或格式不正确。")
+    except Exception as e:
+        print(f"[JimengAI] 错误: 加载 'api_keys.json' 文件失败: {e}")
+
+# ComfyUI启动时执行一次，加载密钥
+load_api_keys()
+
 
 async def _fetch_data_from_url_async(session: aiohttp.ClientSession, url: str) -> bytes:
-    """【异步】从给定的URL下载数据，需要从外部传入一个 aiohttp.ClientSession 对象。"""
+    """【异步】从给定的URL下载数据。"""
     async with session.get(url) as response:
         response.raise_for_status()
         return await response.read()
@@ -56,7 +90,7 @@ async def _download_url_to_image_tensor_async(session: aiohttp.ClientSession, ur
         return None
 
 async def _download_and_save_video_async(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None) -> dict:
-    """【异步】下载视频，保存到ComfyUI的输出文件夹，并返回用于UI预览的字典。"""
+    """【异步】下载视频并保存，返回UI预览数据。"""
     if not video_url: return {"ui": {"video": []}}
     if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
     output_dir = folder_paths.get_output_directory()
@@ -70,7 +104,7 @@ async def _download_and_save_video_async(session: aiohttp.ClientSession, video_u
     return {"ui": {"images": preview_data, "animated": (True,)}}
 
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
-    """检查提示词中是否包含了不应出现的命令行风格参数。"""
+    """检查提示词中是否包含不应出现的命令行风格参数。"""
     for i in text_params:
         if f"--{i}" in prompt: raise ValueError(f"参数 '--{i}' 不应出现在提示词中。请使用节点上对应的控件来设置此值。")
 
@@ -94,17 +128,40 @@ async def _poll_task_until_completion_async(client, task_id: str, timeout=600, i
 # --- 4. 节点类定义 ---
 
 class JimengAPIClient:
-    """节点功能：创建API客户端，供后续节点使用。"""
+    """节点功能：从配置文件加载API密钥，并创建客户端供后续节点使用。"""
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"api_key": ("STRING", {"multiline": False, "default": ""})}}
+        # 从加载的配置中提取所有自定义名称作为下拉菜单的选项
+        key_names = [key["customName"] for key in API_KEYS_CONFIG]
+        # 如果没有加载到任何key，显示一个提示信息
+        if not key_names:
+            key_names = ["未找到密钥,请配置api_keys.json"]
+        
+        return {
+            "required": {
+                # 将输入框改为下拉菜单 (COMBO)
+                "key_name": (key_names,),
+            }
+        }
     
     RETURN_TYPES = ("JIMENG_OPENAI_CLIENT", "JIMENG_ARK_CLIENT")
     RETURN_NAMES = ("openai_client", "ark_client")
     FUNCTION = "create_clients"
     CATEGORY = GLOBAL_CATEGORY
 
-    def create_clients(self, api_key):
+    def create_clients(self, key_name):
+        # 根据用户选择的名称，从配置中查找对应的API Key
+        api_key = None
+        for key_info in API_KEYS_CONFIG:
+            if key_info["customName"] == key_name:
+                api_key = key_info["apiKey"]
+                break
+        
+        # 如果没有找到key（比如配置文件为空），则抛出错误
+        if not api_key:
+            raise ValueError(f"无法为 '{key_name}' 找到对应的API Key。请检查您的 'api_keys.json' 配置文件。")
+            
+        # 使用找到的key创建客户端
         openai_client = AsyncOpenAI(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
         ark_client = Ark(api_key=api_key)
         return (openai_client, ark_client)
