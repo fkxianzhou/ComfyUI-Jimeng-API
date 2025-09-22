@@ -40,7 +40,7 @@
 
       * 进入 `ComfyUI/custom_nodes/ComfyUI-Jimeng-API/` 目录。
       * 找到名为 `api_keys.json.example` 的文件，**将其复制并重命名为 `api_keys.json`**。
-      * 用文本编辑器打开 `api_keys.json` 文件，按照内部格式填入你的火山方舟API Key（[Key从此获取](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)）。你可以配置多个Key。
+      * 用文本编辑器打开 `api_keys.json` 文件，按照内部格式填入你的火山方舟API Key（[从此获取Key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)）。你可以配置多个Key。
         ```json
         [
           {
