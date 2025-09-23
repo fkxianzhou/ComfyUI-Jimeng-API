@@ -1,0 +1,253 @@
+{
+  "JimengAPIClient": {
+    "display_name": "即梦API客户端",
+    "inputs": {
+      "key_name": {
+        "name": "密钥名称"
+      }
+    },
+    "outputs": {
+      "openai_client": {
+        "name": "openai_客户端"
+      },
+      "ark_client": {
+        "name": "ark_客户端"
+      }
+    }
+  },
+  "JimengText2Image": {
+    "display_name": "即梦文生图 (Seedream 3)",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "size": {
+        "name": "尺寸"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "guidance_scale": {
+        "name": "引导系数"
+      },
+      "watermark": {
+        "name": "水印"
+      }
+    },
+    "outputs": {
+      "image": {
+        "name": "图像"
+      },
+      "seed": {
+        "name": "种子"
+      }
+    }
+  },
+  "JimengImageEdit": {
+    "display_name": "即梦图像编辑 (Seededit 3)",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "image": {
+        "name": "图像"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "guidance_scale": {
+        "name": "引导系数"
+      },
+      "watermark": {
+        "name": "水印"
+      }
+    },
+    "outputs": {
+      "image": {
+        "name": "图像"
+      },
+      "seed": {
+        "name": "种子"
+      }
+    }
+  },
+  "JimengSeedream4": {
+    "display_name": "即梦高级图像 (Seedream 4)",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "generation_mode": {
+        "name": "生成模式"
+      },
+      "max_images": {
+        "name": "最大数量"
+      },
+      "size": {
+        "name": "尺寸"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "watermark": {
+        "name": "水印"
+      },
+      "images": {
+        "name": "图像 (可选)"
+      }
+    },
+    "outputs": {
+      "images": {
+        "name": "图像"
+      },
+      "seed": {
+        "name": "种子"
+      }
+    }
+  },
+  "JimengVideoGeneration": {
+    "display_name": "即梦视频生成",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "model_choice": {
+        "name": "模型选择"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "duration": {
+        "name": "时长"
+      },
+      "resolution": {
+        "name": "分辨率"
+      },
+      "aspect_ratio": {
+        "name": "宽高比"
+      },
+      "camerafixed": {
+        "name": "固定镜头"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "image": {
+        "name": "图像 (可选)"
+      }
+    }
+  },
+  "JimengFirstLastFrame2Video": {
+    "display_name": "即梦首尾帧生视频",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "first_frame_image": {
+        "name": "首帧图像"
+      },
+      "last_frame_image": {
+        "name": "尾帧图像"
+      },
+      "model": {
+        "name": "模型"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "duration": {
+        "name": "时长"
+      },
+      "resolution": {
+        "name": "分辨率"
+      },
+      "aspect_ratio": {
+        "name": "宽高比"
+      },
+      "camerafixed": {
+        "name": "固定镜头"
+      },
+      "seed": {
+        "name": "种子"
+      }
+    }
+  },
+  "JimengReferenceImage2Video": {
+    "display_name": "即梦参考图生视频",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "prompt": {
+        "name": "提示词"
+      },
+      "duration": {
+        "name": "时长"
+      },
+      "resolution": {
+        "name": "分辨率"
+      },
+      "aspect_ratio": {
+        "name": "宽高比"
+      },
+      "seed": {
+        "name": "种子"
+      },
+      "ref_image_1": {
+        "name": "参考图 1"
+      },
+      "ref_image_2": {
+        "name": "参考图 2"
+      },
+      "ref_image_3": {
+        "name": "参考图 3"
+      },
+      "ref_image_4": {
+        "name": "参考图 4"
+      }
+    }
+  },
+  "JimengTaskStatusChecker": {
+    "display_name": "即梦任务状态检查器",
+    "inputs": {
+      "client": {
+        "name": "客户端"
+      },
+      "task_id": {
+        "name": "任务ID"
+      }
+    },
+    "outputs": {
+      "video_url": {
+        "name": "视频URL"
+      },
+      "last_frame_url": {
+        "name": "尾帧URL"
+      },
+      "status": {
+        "name": "状态"
+      },
+      "error_message": {
+        "name": "错误信息"
+      },
+      "model": {
+        "name": "模型"
+      },
+      "created_at": {
+        "name": "创建时间"
+      },
+      "updated_at": {
+        "name": "更新时间"
+      }
+    }
+  }
+}

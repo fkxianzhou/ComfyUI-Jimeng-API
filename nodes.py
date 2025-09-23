@@ -7,7 +7,7 @@ import random
 import datetime
 import asyncio
 import aiohttp
-import json # 用于处理JSON配置文件
+import json
 
 import numpy
 import PIL.Image
@@ -37,8 +37,7 @@ def load_api_keys():
     global API_KEYS_CONFIG
     API_KEYS_CONFIG = [] # 每次加载前先清空
     if not os.path.exists(API_KEYS_FILE):
-        # 如果文件不存在，提示用户创建
-        print(f"[JimengAI] 提示: 未找到API密钥配置文件。请将 'api_keys.json.example' 重命名为 'api_keys.json' 并填入您的密钥。")
+        print(f"[JimengAI] Info: API keys file not found. Please rename 'api_keys.json.example' to 'api_keys.json' and fill in your keys.")
         return
 
     try:
@@ -49,13 +48,12 @@ def load_api_keys():
                     if "customName" in item and "apiKey" in item:
                         API_KEYS_CONFIG.append(item)
             if not API_KEYS_CONFIG:
-                print(f"[JimengAI] 警告: 'api_keys.json' 文件为空或格式不正确。")
+                print(f"[JimengAI] Warning: 'api_keys.json' is empty or not formatted correctly.")
     except Exception as e:
-        print(f"[JimengAI] 错误: 加载 'api_keys.json' 文件失败: {e}")
+        print(f"[JimengAI] Error: Failed to load 'api_keys.json': {e}")
 
 # ComfyUI启动时执行一次，加载密钥
 load_api_keys()
-
 
 async def _fetch_data_from_url_async(session: aiohttp.ClientSession, url: str) -> bytes:
     """【异步】从给定的URL下载数据。"""
@@ -104,9 +102,9 @@ async def _download_and_save_video_async(session: aiohttp.ClientSession, video_u
     return {"ui": {"images": preview_data, "animated": (True,)}}
 
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
-    """检查提示词中是否包含不应出现的命令行风格参数。"""
+    """检查提示词中是否包含了不应出现的命令行风格参数。"""
     for i in text_params:
-        if f"--{i}" in prompt: raise ValueError(f"参数 '--{i}' 不应出现在提示词中。请使用节点上对应的控件来设置此值。")
+        if f"--{i}" in prompt: raise ValueError(f"Parameter '--{i}' is not allowed in the prompt. Please use the node's widget for this value.")
 
 async def _poll_task_until_completion_async(client, task_id: str, timeout=600, interval=5):
     """【异步】轮询任务状态，直到任务完成、失败或超时。"""
@@ -117,13 +115,13 @@ async def _poll_task_until_completion_async(client, task_id: str, timeout=600, i
             if get_result.status == "succeeded": return get_result
             elif get_result.status in ["failed", "cancelled"]:
                 error = getattr(get_result, 'error', None)
-                if error: raise RuntimeError(f"任务失败，代码: {error.code}，信息: {error.message}")
-                else: raise RuntimeError(f"任务失败，状态: {get_result.status}")
+                if error: raise RuntimeError(f"Task failed with code: {error.code}, message: {error.message}")
+                else: raise RuntimeError(f"Task failed with status: {get_result.status}")
         except Exception as e:
             if isinstance(e, RuntimeError): raise e
-            print(f"获取任务状态失败，正在重试... 错误: {e}")
+            print(f"Failed to get task status, retrying... Error: {e}")
         await asyncio.sleep(interval)
-    raise TimeoutError(f"任务轮询超时（{timeout}秒），任务ID: {task_id}")
+    raise TimeoutError(f"Task polling timed out after {timeout} seconds for task_id: {task_id}")
 
 # --- 4. 节点类定义 ---
 
@@ -131,18 +129,11 @@ class JimengAPIClient:
     """节点功能：从配置文件加载API密钥，并创建客户端供后续节点使用。"""
     @classmethod
     def INPUT_TYPES(s):
-        # 从加载的配置中提取所有自定义名称作为下拉菜单的选项
         key_names = [key["customName"] for key in API_KEYS_CONFIG]
-        # 如果没有加载到任何key，显示一个提示信息
         if not key_names:
-            key_names = ["未找到密钥,请配置api_keys.json"]
+            key_names = ["No Keys Found in api_keys.json"]
         
-        return {
-            "required": {
-                # 将输入框改为下拉菜单 (COMBO)
-                "key_name": (key_names,),
-            }
-        }
+        return { "required": { "key_name": (key_names,), } }
     
     RETURN_TYPES = ("JIMENG_OPENAI_CLIENT", "JIMENG_ARK_CLIENT")
     RETURN_NAMES = ("openai_client", "ark_client")
@@ -150,18 +141,15 @@ class JimengAPIClient:
     CATEGORY = GLOBAL_CATEGORY
 
     def create_clients(self, key_name):
-        # 根据用户选择的名称，从配置中查找对应的API Key
         api_key = None
         for key_info in API_KEYS_CONFIG:
             if key_info["customName"] == key_name:
                 api_key = key_info["apiKey"]
                 break
         
-        # 如果没有找到key（比如配置文件为空），则抛出错误
         if not api_key:
-            raise ValueError(f"无法为 '{key_name}' 找到对应的API Key。请检查您的 'api_keys.json' 配置文件。")
+            raise ValueError(f"API Key for '{key_name}' not found. Please check your 'api_keys.json' file.")
             
-        # 使用找到的key创建客户端
         openai_client = AsyncOpenAI(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
         ark_client = Ark(api_key=api_key)
         return (openai_client, ark_client)
@@ -182,10 +170,10 @@ class JimengText2Image:
             try:
                 resp = await client.images.generate(model="doubao-seedream-3-0-t2i-250415", prompt=prompt, response_format="url", size=size, extra_body={"seed": actual_seed, "guidance_scale": guidance_scale, "watermark": watermark})
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
-                if image_tensor is None: raise RuntimeError("下载生成的图片失败。")
+                if image_tensor is None: raise RuntimeError("Failed to download the generated image.")
                 return (image_tensor, actual_seed)
             except Exception as e:
-                raise RuntimeError(f"生成图片失败: {e}")
+                raise RuntimeError(f"Failed to generate image: {e}")
 
 class JimengImageEdit:
     """节点功能：根据文本指令编辑一张图片。"""
@@ -204,29 +192,29 @@ class JimengImageEdit:
             try:
                 resp = await client.images.generate(model="doubao-seededit-3-0-i2i-250628", prompt=prompt, extra_body={"image": image_b64, "size": "adaptive", "seed": actual_seed, "guidance_scale": guidance_scale, "watermark": watermark})
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
-                if image_tensor is None: raise RuntimeError("下载编辑后的图片失败。")
+                if image_tensor is None: raise RuntimeError("Failed to download the edited image.")
                 return (image_tensor, actual_seed)
             except Exception as e:
-                raise RuntimeError(f"编辑图片失败: {e}")
+                raise RuntimeError(f"Failed to edit image: {e}")
 
 class JimengSeedream4:
     """节点功能：使用Seedream4模型进行文生图、图生图，并支持单图/组图模式。"""
     RECOMMENDED_SIZES = [ "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_OPENAI_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "generation_mode": (["生成单图 (disabled)", "生成组图 (auto)"],), "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}), "size": (s.RECOMMENDED_SIZES,), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "watermark": ("BOOLEAN", {"default": False}), }, "optional": { "images": ("IMAGE",), } }
+        return { "required": { "client": ("JIMENG_OPENAI_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],), "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}), "size": (s.RECOMMENDED_SIZES,), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "watermark": ("BOOLEAN", {"default": False}), }, "optional": { "images": ("IMAGE",), } }
     RETURN_TYPES = ("IMAGE", "INT")
     RETURN_NAMES = ("images", "seed")
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
     async def generate(self, client, prompt, generation_mode, max_images, size, seed, watermark, images=None):
-        sequential_image_generation = generation_mode.split(" ")[1].strip("()")
+        sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
         n_input_images = 0
         if images is not None: n_input_images = images.shape[0]
-        if n_input_images > 10: raise ValueError("输入图片数量不能超过10张。")
+        if n_input_images > 10: raise ValueError("The number of input images cannot exceed 10.")
         if sequential_image_generation == "auto" and n_input_images + max_images > 15:
-            raise ValueError(f"输入图片数量({n_input_images}) + 最大生成数量({max_images}) 的总和不能超过15。")
+            raise ValueError(f"The sum of input images ({n_input_images}) and max generated images ({max_images}) cannot exceed 15.")
 
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         size_str = size.split(" ")[0]
@@ -248,10 +236,10 @@ class JimengSeedream4:
                 download_tasks = [_download_url_to_image_tensor_async(session, item.url) for item in resp.data]
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
-                if not valid_tensors: raise RuntimeError("下载所有生成的图片均失败。")
+                if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
                 return (torch.cat(valid_tensors, dim=0), actual_seed)
             except Exception as e:
-                raise RuntimeError(f"使用Seedream 4生成失败: {e}")
+                raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
 
 class JimengVideoGeneration:
     """节点功能：根据文本或图片输入生成视频，并直接预览结果。"""
@@ -301,7 +289,7 @@ class JimengVideoGeneration:
                 create_result = await asyncio.to_thread(client.content_generation.tasks.create, model=final_model_name, content=content)
                 task_id = create_result.id
             except Exception as e: 
-                raise RuntimeError(f"创建任务失败: {e}")
+                raise RuntimeError(f"Failed to create task: {e}")
             try:
                 final_result = await _poll_task_until_completion_async(client, task_id)
                 video_url = final_result.content.video_url
@@ -345,7 +333,7 @@ class JimengFirstLastFrame2Video:
             try:
                 create_result = await asyncio.to_thread( client.content_generation.tasks.create, model=model, content=content )
                 task_id = create_result.id
-            except Exception as e: raise RuntimeError(f"创建任务失败: {e}")
+            except Exception as e: raise RuntimeError(f"Failed to create task: {e}")
             try:
                 final_result = await _poll_task_until_completion_async(client, task_id)
                 return await _download_and_save_video_async(session, final_result.content.video_url, "Jimeng_F&L-I2V", actual_seed)
@@ -386,12 +374,12 @@ class JimengReferenceImage2Video:
         ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
         for img_tensor in ref_images:
             if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
-        if len(content) == 1: raise ValueError("至少需要提供一张参考图片。")
+        if len(content) == 1: raise ValueError("At least one reference image must be provided.")
         async with aiohttp.ClientSession() as session:
             try:
                 create_result = await asyncio.to_thread( client.content_generation.tasks.create, model=model, content=content )
                 task_id = create_result.id
-            except Exception as e: raise RuntimeError(f"创建任务失败: {e}")
+            except Exception as e: raise RuntimeError(f"Failed to create task: {e}")
             try:
                 final_result = await _poll_task_until_completion_async(client, task_id)
                 return await _download_and_save_video_async(session, final_result.content.video_url, "Jimeng_Ref-I2V", actual_seed)
@@ -411,7 +399,7 @@ class JimengTaskStatusChecker:
     CATEGORY = GLOBAL_CATEGORY
     
     async def check_status(self, client, task_id):
-        if not task_id: return ("", "", "no task_id provided", "错误: 任务ID为空。", "", "", "")
+        if not task_id: return ("", "", "no task_id provided", "Error: Task ID is empty.", "", "", "")
         try:
             get_result = await asyncio.to_thread(client.content_generation.tasks.get, task_id=task_id)
             status, model = get_result.status, get_result.model
@@ -422,10 +410,10 @@ class JimengTaskStatusChecker:
                 video_url = get_result.content.video_url
                 last_frame_url = getattr(get_result.content, 'last_frame_url', "")
             elif status == "failed" and get_result.error:
-                error_message = f"代码: {get_result.error.code}, 信息: {get_result.error.message}"
+                error_message = f"Code: {get_result.error.code}, Message: {get_result.error.message}"
             return (video_url, last_frame_url, status, error_message, model, created_at, updated_at)
         except Exception as e:
-            return ("", "", "api_error", f"API错误: {e}", "", "", "")
+            return ("", "", "api_error", f"API Error: {e}", "", "", "")
 
 # --- 5. 节点注册 ---
 NODE_CLASS_MAPPINGS = {
@@ -439,13 +427,14 @@ NODE_CLASS_MAPPINGS = {
     "JimengTaskStatusChecker": JimengTaskStatusChecker,
 }
 
+# 节点在UI中显示的名称
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "JimengAPIClient": "即梦API客户端 (Jimeng Client)",
-    "JimengText2Image": "即梦文生图 (Seedream 3)",
-    "JimengImageEdit": "即梦图像编辑 (Seededit 3)",
-    "JimengSeedream4": "即梦高级图像 (Seedream 4)",
-    "JimengVideoGeneration": "即梦视频生成",
-    "JimengFirstLastFrame2Video": "即梦首尾帧生视频 (F&L-I2V)",
-    "JimengReferenceImage2Video": "即梦参考图生视频 (Ref-I2V)",
-    "JimengTaskStatusChecker": "即梦任务状态检查器",
+    "JimengAPIClient": "Jimeng API Client",
+    "JimengText2Image": "Jimeng Text to Image (Seedream 3)",
+    "JimengImageEdit": "Jimeng Image Edit (Seededit 3)",
+    "JimengSeedream4": "Jimeng Advanced Image (Seedream 4)",
+    "JimengVideoGeneration": "Jimeng Video Generation",
+    "JimengFirstLastFrame2Video": "Jimeng F&L Frame to Video",
+    "JimengReferenceImage2Video": "Jimeng Reference to Video",
+    "JimengTaskStatusChecker": "Jimeng Task Status Checker",
 }
