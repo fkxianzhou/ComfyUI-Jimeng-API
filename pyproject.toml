@@ -1,15 +1,20 @@
 [project]
 name = "jimengAPI"
 description = "ComfyUI nodes for Volcano Ark (Jimeng) API"
-version = "1.2.4"
+version = "1.2.5"
 license = {file = "LICENSE"}
 dependencies = ["volcengine-python-sdk[ark]", "openai"]
 
 [project.urls]
 Repository = "https://github.com/fkxianzhou/ComfyUI-Jimeng-API"
-#  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
 PublisherId = "fkxianzhou"
 DisplayName = "ComfyUI-Jimeng-API"
 Icon = ""
+
+[tool.setuptools]
+py-modules = ["nodes"]
+
+[tool.setuptools.package-data]
+"*" = ["example_workflows/*.json"]
