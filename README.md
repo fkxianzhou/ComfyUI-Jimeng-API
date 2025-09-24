@@ -20,7 +20,7 @@
     在终端中，导航至 `ComfyUI/custom_nodes/` 目录，然后运行：
 
     ```bash
-    git clone [https://github.com/fkxianzhou/ComfyUI-Jimeng-API.git](https://github.com/fkxianzhou/ComfyUI-Jimeng-API.git)
+    git clone https://github.com/fkxianzhou/ComfyUI-Jimeng-API.git
     ```
 
 2.  **安装依赖**
