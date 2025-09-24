@@ -125,8 +125,14 @@ async def _poll_task_until_completion_async(client, task_id: str, timeout=600, i
 
 # --- 4. 节点类定义 ---
 
+class JimengClients:
+    """一个简单的容器类，用于同时持有两种API客户端。"""
+    def __init__(self, openai_client, ark_client):
+        self.openai = openai_client
+        self.ark = ark_client
+
 class JimengAPIClient:
-    """节点功能：从配置文件加载API密钥，并创建客户端供后续节点使用。"""
+    """节点功能：从配置文件加载API密钥，并创建统一的客户端供后续节点使用。"""
     @classmethod
     def INPUT_TYPES(s):
         key_names = [key["customName"] for key in API_KEYS_CONFIG]
@@ -135,8 +141,8 @@ class JimengAPIClient:
         
         return { "required": { "key_name": (key_names,), } }
     
-    RETURN_TYPES = ("JIMENG_OPENAI_CLIENT", "JIMENG_ARK_CLIENT")
-    RETURN_NAMES = ("openai_client", "ark_client")
+    RETURN_TYPES = ("JIMENG_CLIENT",)
+    RETURN_NAMES = ("client",)
     FUNCTION = "create_clients"
     CATEGORY = GLOBAL_CATEGORY
 
@@ -152,57 +158,81 @@ class JimengAPIClient:
             
         openai_client = AsyncOpenAI(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
         ark_client = Ark(api_key=api_key)
-        return (openai_client, ark_client)
+        
+        # 返回一个包含两个客户端的容器对象
+        clients = JimengClients(openai_client, ark_client)
+        return (clients,)
 
-class JimengText2Image:
-    """节点功能：文本生成图片。"""
+class JimengSeedream3:
+    """节点功能：根据文本或图片输入生成图片（Seedream 3 & Seededit 3）。"""
+    RECOMMENDED_SIZES = ["1024x1024 (1:1)", "864x1152 (3:4)", "1152x864 (4:3)", "1280x720 (16:9)", "720x1280 (9:16)", "832x1248 (2:3)", "1248x832 (3:2)", "1512x648 (21:9)"]
+    
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_OPENAI_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "size": (["1024x1024", "864x1152", "1152x864", "1280x720", "720x1280", "832x1248", "1248x832", "1512x648"],), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "guidance_scale": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1}), "watermark": ("BOOLEAN", {"default": False}), }, }
+        return {
+            "required": {
+                "client": ("JIMENG_CLIENT",),
+                "prompt": ("STRING", {"multiline": True, "default": ""}),
+                "size": (s.RECOMMENDED_SIZES,),
+                "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}),
+                "guidance_scale": ("FLOAT", {"default": 5.0, "min": 1.0, "max": 10.0, "step": 0.1}),
+                "watermark": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "image": ("IMAGE",),
+            }
+        }
     RETURN_TYPES = ("IMAGE", "INT")
     RETURN_NAMES = ("image", "seed")
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, size, seed, guidance_scale, watermark):
+    async def generate(self, client, prompt, size, seed, guidance_scale, watermark, image=None):
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
+        openai_client = client.openai
+
+        model_id = ""
+        extra_body = {
+            "seed": actual_seed,
+            "guidance_scale": guidance_scale,
+            "watermark": watermark
+        }
+        
+        size_param = size.split(" ")[0]
+
+        # 根据是否有图像输入来选择模型和参数
+        if image is None:
+            # 文生图模式
+            model_id = "doubao-seedream-3-0-t2i-250415"
+        else:
+            # 图生图（编辑）模式
+            model_id = "doubao-seededit-3-0-i2i-250628"
+            image_b64 = f"data:image/jpeg;base64,{_image_to_base64(image)}"
+            extra_body["image"] = image_b64
+            size_param = "adaptive"
+
         async with aiohttp.ClientSession() as session:
             try:
-                resp = await client.images.generate(model="doubao-seedream-3-0-t2i-250415", prompt=prompt, response_format="url", size=size, extra_body={"seed": actual_seed, "guidance_scale": guidance_scale, "watermark": watermark})
+                resp = await openai_client.images.generate(
+                    model=model_id,
+                    prompt=prompt,
+                    size=size_param,
+                    response_format="url",
+                    extra_body=extra_body
+                )
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
-                if image_tensor is None: raise RuntimeError("Failed to download the generated image.")
+                if image_tensor is None:
+                    raise RuntimeError("Failed to download the generated image.")
                 return (image_tensor, actual_seed)
             except Exception as e:
-                raise RuntimeError(f"Failed to generate image: {e}")
-
-class JimengImageEdit:
-    """节点功能：根据文本指令编辑一张图片。"""
-    @classmethod
-    def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_OPENAI_CLIENT",), "image": ("IMAGE",), "prompt": ("STRING", {"multiline": True, "default": ""}), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "guidance_scale": ("FLOAT", {"default": 5.5, "min": 1.0, "max": 10.0, "step": 0.1}), "watermark": ("BOOLEAN", {"default": False}), }, }
-    RETURN_TYPES = ("IMAGE", "INT")
-    RETURN_NAMES = ("image", "seed")
-    FUNCTION = "generate"
-    CATEGORY = GLOBAL_CATEGORY
-
-    async def generate(self, client, image, prompt, seed, guidance_scale, watermark):
-        actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
-        image_b64 = f"data:image/jpeg;base64,{_image_to_base64(image)}"
-        async with aiohttp.ClientSession() as session:
-            try:
-                resp = await client.images.generate(model="doubao-seededit-3-0-i2i-250628", prompt=prompt, extra_body={"image": image_b64, "size": "adaptive", "seed": actual_seed, "guidance_scale": guidance_scale, "watermark": watermark})
-                image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
-                if image_tensor is None: raise RuntimeError("Failed to download the edited image.")
-                return (image_tensor, actual_seed)
-            except Exception as e:
-                raise RuntimeError(f"Failed to edit image: {e}")
+                raise RuntimeError(f"Failed to generate image with model {model_id}: {e}")
 
 class JimengSeedream4:
     """节点功能：使用Seedream4模型进行文生图、图生图，并支持单图/组图模式。"""
     RECOMMENDED_SIZES = [ "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_OPENAI_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],), "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}), "size": (s.RECOMMENDED_SIZES,), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "watermark": ("BOOLEAN", {"default": False}), }, "optional": { "images": ("IMAGE",), } }
+        return { "required": { "client": ("JIMENG_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],), "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}), "size": (s.RECOMMENDED_SIZES,), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "watermark": ("BOOLEAN", {"default": False}), }, "optional": { "images": ("IMAGE",), } }
     RETURN_TYPES = ("IMAGE", "INT")
     RETURN_NAMES = ("images", "seed")
     FUNCTION = "generate"
@@ -230,9 +260,10 @@ class JimengSeedream4:
         if sequential_image_generation == "auto":
             extra_body['sequential_image_generation_options'] = {"max_images": max_images}
 
+        openai_client = client.openai # 从容器中获取openai客户端
         async with aiohttp.ClientSession() as session:
             try:
-                resp = await client.images.generate(model="doubao-seedream-4-0-250828", prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
+                resp = await openai_client.images.generate(model="doubao-seedream-4-0-250828", prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
                 download_tasks = [_download_url_to_image_tensor_async(session, item.url) for item in resp.data]
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
@@ -242,13 +273,13 @@ class JimengSeedream4:
                 raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
 
 class JimengVideoGeneration:
-    """节点功能：根据文本或图片输入生成视频，并直接预览结果。"""
+    """节点功能：根据文本或图片输入（首帧/尾帧）生成视频，并直接预览结果。"""
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
         return { 
             "required": { 
-                "client": ("JIMENG_ARK_CLIENT",),
+                "client": ("JIMENG_CLIENT",),
                 "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}), 
                 "prompt": ("STRING", {"multiline": True, "default": ""}), 
                 "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
@@ -257,86 +288,73 @@ class JimengVideoGeneration:
                 "camerafixed": ("BOOLEAN", {"default": True}), 
                 "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
             },
-            "optional": { "image": ("IMAGE",), } 
+            "optional": { 
+                "image": ("IMAGE",), # Represents the first frame
+                "last_frame_image": ("IMAGE",) 
+            } 
         }
-    RETURN_TYPES = ()
-    RETURN_NAMES = ()
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("last_frame",)
     FUNCTION = "generate"
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None):
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None, last_frame_image=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
-        
+
+        # 后端检查：如果提供了尾帧，但选择了不支持尾帧的pro模型，则抛出错误
+        if last_frame_image is not None and model_choice == "doubao-seedance-1-0-pro":
+            raise ValueError("The 'doubao-seedance-1-0-pro' model does not support last frame input. Please use the 'lite' model or remove the last frame image.")
+
         final_model_name = ""
         if model_choice == "doubao-seedance-1-0-pro":
             final_model_name = "doubao-seedance-1-0-pro-250528"
         elif model_choice == "doubao-seedance-1-0-lite":
-            if image is None: final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
-            else: final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
+            if image is None: 
+                final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
+            else: 
+                final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
         
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
         prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
         
         content = [{"type": "text", "text": prompt_string}]
+        
+        # 添加首帧图像
         if image is not None:
-            base64_str = _image_to_base64(image)
-            data_url = f"data:image/jpeg;base64,{base64_str}"
-            content.append({"type": "image_url", "image_url": {"url": data_url}, "role": "first_frame"})
+            first_frame_b64 = _image_to_base64(image)
+            first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
+            content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
+        
+        # 添加尾帧图像
+        if last_frame_image is not None:
+            # 确保有首帧才能有尾帧
+            if image is None:
+                raise ValueError("A first frame image must be provided when using a last frame image.")
+            last_frame_b64 = _image_to_base64(last_frame_image)
+            last_frame_url = f"data:image/jpeg;base64,{last_frame_b64}"
+            content.append({"type": "image_url", "image_url": {"url": last_frame_url}, "role": "last_frame"})
 
+        ark_client = client.ark
         async with aiohttp.ClientSession() as session:
             try:
-                create_result = await asyncio.to_thread(client.content_generation.tasks.create, model=final_model_name, content=content)
+                create_result = await asyncio.to_thread(ark_client.content_generation.tasks.create, model=final_model_name, content=content, return_last_frame=True)
                 task_id = create_result.id
             except Exception as e: 
                 raise RuntimeError(f"Failed to create task: {e}")
+            
             try:
-                final_result = await _poll_task_until_completion_async(client, task_id)
+                final_result = await _poll_task_until_completion_async(ark_client, task_id)
                 video_url = final_result.content.video_url
-                filename_prefix = "Jimeng_T2V" if image is None else "Jimeng_I2V"
-                return await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed)
-            except (RuntimeError, TimeoutError) as e:
-                print(e)
-                return {"ui": {"video": []}}
-
-class JimengFirstLastFrame2Video:
-    """节点功能：根据首尾两帧图片生成过渡视频，并直接预览。"""
-    ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
-    @classmethod
-    def INPUT_TYPES(s):
-        return { "required": { 
-            "client": ("JIMENG_ARK_CLIENT",), 
-            "first_frame_image": ("IMAGE",), 
-            "last_frame_image": ("IMAGE",), 
-            "model": (["doubao-seedance-1-0-lite-i2v-250428"],), 
-            "prompt": ("STRING", {"multiline": True, "default": ""}), 
-            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
-            "resolution": (["480p", "720p", "1080p"], {"default": "720p"}), 
-            "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}), 
-            "camerafixed": ("BOOLEAN", {"default": True}), 
-            "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
-        }, }
-    RETURN_TYPES = ()
-    RETURN_NAMES = ()
-    FUNCTION = "generate"
-    OUTPUT_NODE = True
-    CATEGORY = GLOBAL_CATEGORY
-
-    async def generate(self, client, first_frame_image, last_frame_image, model, prompt, duration, resolution, aspect_ratio, camerafixed, seed):
-        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
-        actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
-        first_frame_data_url = f"data:image/jpeg;base64,{_image_to_base64(first_frame_image)}"
-        last_frame_data_url = f"data:image/jpeg;base64,{_image_to_base64(last_frame_image)}"
-        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} --dur {duration} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
-        content = [ {"type": "text", "text": prompt_string}, {"type": "image_url", "image_url": {"url": first_frame_data_url}, "role": "first_frame"}, {"type": "image_url", "image_url": {"url": last_frame_data_url}, "role": "last_frame"} ]
-        async with aiohttp.ClientSession() as session:
-            try:
-                create_result = await asyncio.to_thread( client.content_generation.tasks.create, model=model, content=content )
-                task_id = create_result.id
-            except Exception as e: raise RuntimeError(f"Failed to create task: {e}")
-            try:
-                final_result = await _poll_task_until_completion_async(client, task_id)
-                return await _download_and_save_video_async(session, final_result.content.video_url, "Jimeng_F&L-I2V", actual_seed)
+                last_frame_url = getattr(final_result.content, 'last_frame_url', None)
+                
+                filename_prefix = "Jimeng_VideoGen"
+                ui_data = await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed)
+                
+                last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
+                
+                return {"ui": ui_data["ui"], "result": (last_frame_tensor,)}
+                
             except (RuntimeError, TimeoutError) as e:
                 print(e)
                 return {"ui": {"video": []}}
@@ -347,7 +365,7 @@ class JimengReferenceImage2Video:
     @classmethod
     def INPUT_TYPES(s):
         return { "required": { 
-            "client": ("JIMENG_ARK_CLIENT",), 
+            "client": ("JIMENG_CLIENT",), 
             "prompt": ("STRING", {"multiline": True, "default": ""}), 
             "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
             "resolution": (["480p", "720p"], {"default": "720p"}), 
@@ -359,8 +377,8 @@ class JimengReferenceImage2Video:
             "ref_image_3": ("IMAGE",), 
             "ref_image_4": ("IMAGE",), 
         } }
-    RETURN_TYPES = ()
-    RETURN_NAMES = ()
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("last_frame",)
     FUNCTION = "generate"
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
@@ -375,14 +393,23 @@ class JimengReferenceImage2Video:
         for img_tensor in ref_images:
             if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
         if len(content) == 1: raise ValueError("At least one reference image must be provided.")
+        ark_client = client.ark # 从容器中获取ark客户端
         async with aiohttp.ClientSession() as session:
             try:
-                create_result = await asyncio.to_thread( client.content_generation.tasks.create, model=model, content=content )
+                create_result = await asyncio.to_thread( ark_client.content_generation.tasks.create, model=model, content=content, return_last_frame=True )
                 task_id = create_result.id
             except Exception as e: raise RuntimeError(f"Failed to create task: {e}")
             try:
-                final_result = await _poll_task_until_completion_async(client, task_id)
-                return await _download_and_save_video_async(session, final_result.content.video_url, "Jimeng_Ref-I2V", actual_seed)
+                final_result = await _poll_task_until_completion_async(ark_client, task_id)
+                video_url = final_result.content.video_url
+                last_frame_url = getattr(final_result.content, 'last_frame_url', None)
+
+                ui_data = await _download_and_save_video_async(session, video_url, "Jimeng_Ref-I2V", actual_seed)
+                
+                last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
+                
+                return {"ui": ui_data["ui"], "result": (last_frame_tensor,)}
+
             except (RuntimeError, TimeoutError) as e:
                 print(e)
                 return {"ui": {"video": []}}
@@ -391,7 +418,7 @@ class JimengTaskStatusChecker:
     """节点功能：手动输入一个任务ID来查询其状态和结果。"""
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_ARK_CLIENT",), "task_id": ("STRING", {"forceInput": True}), } }
+        return { "required": { "client": ("JIMENG_CLIENT",), "task_id": ("STRING", {"forceInput": True}), } }
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("video_url", "last_frame_url", "status", "error_message", "model", "created_at", "updated_at")
     FUNCTION = "check_status"
@@ -400,8 +427,9 @@ class JimengTaskStatusChecker:
     
     async def check_status(self, client, task_id):
         if not task_id: return ("", "", "no task_id provided", "Error: Task ID is empty.", "", "", "")
+        ark_client = client.ark # 从容器中获取ark客户端
         try:
-            get_result = await asyncio.to_thread(client.content_generation.tasks.get, task_id=task_id)
+            get_result = await asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=task_id)
             status, model = get_result.status, get_result.model
             created_at = datetime.datetime.fromtimestamp(get_result.created_at).strftime('%Y-%m-%d %H:%M:%S')
             updated_at = datetime.datetime.fromtimestamp(get_result.updated_at).strftime('%Y-%m-%d %H:%M:%S')
@@ -418,11 +446,9 @@ class JimengTaskStatusChecker:
 # --- 5. 节点注册 ---
 NODE_CLASS_MAPPINGS = {
     "JimengAPIClient": JimengAPIClient,
-    "JimengText2Image": JimengText2Image,
-    "JimengImageEdit": JimengImageEdit,
+    "JimengSeedream3": JimengSeedream3,
     "JimengSeedream4": JimengSeedream4,
     "JimengVideoGeneration": JimengVideoGeneration,
-    "JimengFirstLastFrame2Video": JimengFirstLastFrame2Video,
     "JimengReferenceImage2Video": JimengReferenceImage2Video,
     "JimengTaskStatusChecker": JimengTaskStatusChecker,
 }
@@ -430,11 +456,9 @@ NODE_CLASS_MAPPINGS = {
 # 节点在UI中显示的名称
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengAPIClient": "Jimeng API Client",
-    "JimengText2Image": "Jimeng Text to Image (Seedream 3)",
-    "JimengImageEdit": "Jimeng Image Edit (Seededit 3)",
-    "JimengSeedream4": "Jimeng Advanced Image (Seedream 4)",
+    "JimengSeedream3": "Jimeng Seedream 3",
+    "JimengSeedream4": "Jimeng Seedream 4",
     "JimengVideoGeneration": "Jimeng Video Generation",
-    "JimengFirstLastFrame2Video": "Jimeng F&L Frame to Video",
     "JimengReferenceImage2Video": "Jimeng Reference to Video",
     "JimengTaskStatusChecker": "Jimeng Task Status Checker",
 }

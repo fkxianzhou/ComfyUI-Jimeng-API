@@ -7,16 +7,13 @@
       }
     },
     "outputs": {
-      "openai_client": {
-        "name": "openai_客户端"
-      },
-      "ark_client": {
-        "name": "ark_客户端"
+      "0": {
+        "name": "客户端"
       }
     }
   },
-  "JimengText2Image": {
-    "display_name": "即梦文生图 (Seedream 3)",
+  "JimengSeedream3": {
+    "display_name": "即梦 Seedream 3",
     "inputs": {
       "client": {
         "name": "客户端"
@@ -35,50 +32,22 @@
       },
       "watermark": {
         "name": "水印"
+      },
+      "image": {
+        "name": "图像 (可选)"
       }
     },
     "outputs": {
-      "image": {
+      "0": {
         "name": "图像"
       },
-      "seed": {
-        "name": "种子"
-      }
-    }
-  },
-  "JimengImageEdit": {
-    "display_name": "即梦图像编辑 (Seededit 3)",
-    "inputs": {
-      "client": {
-        "name": "客户端"
-      },
-      "image": {
-        "name": "图像"
-      },
-      "prompt": {
-        "name": "提示词"
-      },
-      "seed": {
-        "name": "种子"
-      },
-      "guidance_scale": {
-        "name": "引导系数"
-      },
-      "watermark": {
-        "name": "水印"
-      }
-    },
-    "outputs": {
-      "image": {
-        "name": "图像"
-      },
-      "seed": {
+      "1": {
         "name": "种子"
       }
     }
   },
   "JimengSeedream4": {
-    "display_name": "即梦高级图像 (Seedream 4)",
+    "display_name": "即梦 Seedream 4",
     "inputs": {
       "client": {
         "name": "客户端"
@@ -106,10 +75,10 @@
       }
     },
     "outputs": {
-      "images": {
+      "0": {
         "name": "图像"
       },
-      "seed": {
+      "1": {
         "name": "种子"
       }
     }
@@ -142,42 +111,15 @@
         "name": "种子"
       },
       "image": {
-        "name": "图像 (可选)"
-      }
-    }
-  },
-  "JimengFirstLastFrame2Video": {
-    "display_name": "即梦首尾帧生视频",
-    "inputs": {
-      "client": {
-        "name": "客户端"
-      },
-      "first_frame_image": {
-        "name": "首帧图像"
+        "name": "首帧图像 (可选)"
       },
       "last_frame_image": {
-        "name": "尾帧图像"
-      },
-      "model": {
-        "name": "模型"
-      },
-      "prompt": {
-        "name": "提示词"
-      },
-      "duration": {
-        "name": "时长"
-      },
-      "resolution": {
-        "name": "分辨率"
-      },
-      "aspect_ratio": {
-        "name": "宽高比"
-      },
-      "camerafixed": {
-        "name": "固定镜头"
-      },
-      "seed": {
-        "name": "种子"
+        "name": "尾帧图像 (可选)"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "视频尾帧"
       }
     }
   },
@@ -214,6 +156,11 @@
       "ref_image_4": {
         "name": "参考图 4"
       }
+    },
+    "outputs": {
+      "0": {
+        "name": "视频尾帧"
+      }
     }
   },
   "JimengTaskStatusChecker": {
@@ -227,25 +174,25 @@
       }
     },
     "outputs": {
-      "video_url": {
+      "0": {
         "name": "视频URL"
       },
-      "last_frame_url": {
+      "1": {
         "name": "尾帧URL"
       },
-      "status": {
+      "2": {
         "name": "状态"
       },
-      "error_message": {
+      "3": {
         "name": "错误信息"
       },
-      "model": {
+      "4": {
         "name": "模型"
       },
-      "created_at": {
+      "5": {
         "name": "创建时间"
       },
-      "updated_at": {
+      "6": {
         "name": "更新时间"
       }
     }
