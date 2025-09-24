@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-jimeng-api"
 description = "ComfyUI nodes for Volcano Ark (Jimeng) API"
-version = "1.2.6"
+version = "1.2.7"
 license = {file = "LICENSE"}
 dependencies = ["volcengine-python-sdk[ark]", "openai"]
 
