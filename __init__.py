@@ -2,5 +2,5 @@ import os
 import sys
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
-WEB_DIRECTORY = "."
+WEB_DIRECTORY = "example_workflows"
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
