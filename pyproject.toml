@@ -1,5 +1,5 @@
 [project]
-name = "jimengAPI"
+name = "comfyui-jimeng-api"
 description = "ComfyUI nodes for Volcano Ark (Jimeng) API"
 version = "1.2.6"
 license = {file = "LICENSE"}
@@ -10,5 +10,5 @@ Repository = "https://github.com/fkxianzhou/ComfyUI-Jimeng-API"
 
 [tool.comfy]
 PublisherId = "fkxianzhou"
-DisplayName = "ComfyUI-Jimeng-API"
+DisplayName = "ComfyUI Jimeng API"
 Icon = ""
