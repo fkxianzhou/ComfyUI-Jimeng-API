@@ -87,10 +87,14 @@ async def _download_url_to_image_tensor_async(session: aiohttp.ClientSession, ur
         print(f"异步下载或转换图片失败，URL: {url}，错误: {e}")
         return None
 
-async def _download_and_save_video_async(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None) -> dict:
+async def _download_and_save_video_async(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> dict:
     """【异步】下载视频并保存，返回UI预览数据。"""
     if not video_url: return {"ui": {"video": []}}
     if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
+
+    if save_path:
+        filename_prefix = os.path.join(save_path, filename_prefix)
+
     output_dir = folder_paths.get_output_directory()
     (full_output_folder, filename, _, subfolder, _) = folder_paths.get_save_image_path(filename_prefix, output_dir)
     file_ext = video_url.split('.')[-1].split('?')[0]
@@ -277,21 +281,22 @@ class JimengVideoGeneration:
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
-        return { 
-            "required": { 
+        return {
+            "required": {
                 "client": ("JIMENG_CLIENT",),
-                "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}), 
-                "prompt": ("STRING", {"multiline": True, "default": ""}), 
-                "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
-                "resolution": (["480p", "720p", "1080p"], {"default": "720p"}), 
+                "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}),
+                "prompt": ("STRING", {"multiline": True, "default": ""}),
+                "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}),
+                "resolution": (["480p", "720p", "1080p"], {"default": "720p"}),
                 "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
-                "camerafixed": ("BOOLEAN", {"default": True}), 
-                "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
+                "camerafixed": ("BOOLEAN", {"default": True}),
+                "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
             },
-            "optional": { 
+            "optional": {
+                "save_path": ("STRING", {"default": "Jimeng"}),
                 "image": ("IMAGE",), # Represents the first frame
-                "last_frame_image": ("IMAGE",) 
-            } 
+                "last_frame_image": ("IMAGE",)
+            }
         }
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("last_frame",)
@@ -299,7 +304,7 @@ class JimengVideoGeneration:
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None, last_frame_image=None):
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path, image=None, last_frame_image=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
 
         # 后端检查：如果提供了尾帧，但选择了不支持尾帧的pro模型，则抛出错误
@@ -310,9 +315,9 @@ class JimengVideoGeneration:
         if model_choice == "doubao-seedance-1-0-pro":
             final_model_name = "doubao-seedance-1-0-pro-250528"
         elif model_choice == "doubao-seedance-1-0-lite":
-            if image is None: 
+            if image is None:
                 final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
-            else: 
+            else:
                 final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
         
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
@@ -340,7 +345,7 @@ class JimengVideoGeneration:
             try:
                 create_result = await asyncio.to_thread(ark_client.content_generation.tasks.create, model=final_model_name, content=content, return_last_frame=True)
                 task_id = create_result.id
-            except Exception as e: 
+            except Exception as e:
                 raise RuntimeError(f"Failed to create task: {e}")
             
             try:
@@ -349,7 +354,7 @@ class JimengVideoGeneration:
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
                 
                 filename_prefix = "Jimeng_VideoGen"
-                ui_data = await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed)
+                ui_data = await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed, save_path)
                 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
@@ -364,18 +369,19 @@ class JimengReferenceImage2Video:
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { 
-            "client": ("JIMENG_CLIENT",), 
-            "prompt": ("STRING", {"multiline": True, "default": ""}), 
-            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}), 
-            "resolution": (["480p", "720p"], {"default": "720p"}), 
-            "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}), 
-            "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}), 
-        }, "optional": { 
-            "ref_image_1": ("IMAGE",), 
-            "ref_image_2": ("IMAGE",), 
-            "ref_image_3": ("IMAGE",), 
-            "ref_image_4": ("IMAGE",), 
+        return { "required": {
+            "client": ("JIMENG_CLIENT",),
+            "prompt": ("STRING", {"multiline": True, "default": ""}),
+            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}),
+            "resolution": (["480p", "720p"], {"default": "720p"}),
+            "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
+            "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
+        }, "optional": {
+            "save_path": ("STRING", {"default": "Jimeng"}),
+            "ref_image_1": ("IMAGE",),
+            "ref_image_2": ("IMAGE",),
+            "ref_image_3": ("IMAGE",),
+            "ref_image_4": ("IMAGE",),
         } }
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("last_frame",)
@@ -383,7 +389,7 @@ class JimengReferenceImage2Video:
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
+    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, save_path, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "seed"])
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
         model = "doubao-seedance-1-0-lite-i2v-250428"
@@ -404,7 +410,7 @@ class JimengReferenceImage2Video:
                 video_url = final_result.content.video_url
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
 
-                ui_data = await _download_and_save_video_async(session, video_url, "Jimeng_Ref-I2V", actual_seed)
+                ui_data = await _download_and_save_video_async(session, video_url, "Jimeng_Ref-I2V", actual_seed, save_path)
                 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
