@@ -233,16 +233,31 @@ class JimengSeedream3:
 
 class JimengSeedream4:
     """节点功能：使用Seedream4模型进行文生图、图生图，并支持单图/组图模式。"""
-    RECOMMENDED_SIZES = [ "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
+    RECOMMENDED_SIZES = [ "Custom", "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_CLIENT",), "prompt": ("STRING", {"multiline": True, "default": ""}), "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],), "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}), "size": (s.RECOMMENDED_SIZES,), "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}), "watermark": ("BOOLEAN", {"default": False}), }, "optional": { "images": ("IMAGE",), } }
+        return {
+            "required": {
+                "client": ("JIMENG_CLIENT",),
+                "prompt": ("STRING", {"multiline": True, "default": ""}),
+                "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],),
+                "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}),
+                "size": (s.RECOMMENDED_SIZES,),
+                "width": ("INT", {"default": 2048, "min": 1, "max": 8192, "step": 1}),
+                "height": ("INT", {"default": 2048, "min": 1, "max": 8192, "step": 1}),
+                "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}),
+                "watermark": ("BOOLEAN", {"default": False}),
+            },
+            "optional": {
+                "images": ("IMAGE",),
+            }
+        }
     RETURN_TYPES = ("IMAGE", "INT")
     RETURN_NAMES = ("images", "seed")
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, generation_mode, max_images, size, seed, watermark, images=None):
+    async def generate(self, client, prompt, generation_mode, max_images, size, width, height, seed, watermark, images=None):
         sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
         n_input_images = 0
         if images is not None: n_input_images = images.shape[0]
@@ -251,7 +266,22 @@ class JimengSeedream4:
             raise ValueError(f"The sum of input images ({n_input_images}) and max generated images ({max_images}) cannot exceed 15.")
 
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
-        size_str = size.split(" ")[0]
+        
+        if size == "Custom":
+            # Validate custom dimensions
+            total_pixels = width * height
+            min_pixels = 1280 * 720
+            max_pixels = 4096 * 4096
+            if not (min_pixels <= total_pixels <= max_pixels):
+                raise ValueError(f"Total pixels must be between {min_pixels} and {max_pixels}. Your current: {total_pixels}")
+
+            aspect_ratio = width / height
+            if not (1/16 <= aspect_ratio <= 16):
+                raise ValueError(f"Aspect ratio must be between 1/16 and 16. Your current: {aspect_ratio}")
+
+            size_str = f"{width}x{height}"
+        else:
+            size_str = size.split(" ")[0]
         
         image_param = None
         if images is not None:
@@ -307,9 +337,9 @@ class JimengVideoGeneration:
     async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path, image=None, last_frame_image=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
 
-        # 后端检查：如果提供了尾帧，但选择了不支持尾帧的pro模型，则抛出错误
-        if last_frame_image is not None and model_choice == "doubao-seedance-1-0-pro":
-            raise ValueError("The 'doubao-seedance-1-0-pro' model does not support last frame input. Please use the 'lite' model or remove the last frame image.")
+        # --- 修改部分开始 ---
+        # 移除了原有的对 doubao-seedance-1-0-pro 模型的尾帧限制
+        # --- 修改部分结束 ---
 
         final_model_name = ""
         if model_choice == "doubao-seedance-1-0-pro":
