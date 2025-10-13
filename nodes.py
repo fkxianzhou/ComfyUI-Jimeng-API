@@ -337,10 +337,6 @@ class JimengVideoGeneration:
     async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path, image=None, last_frame_image=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
 
-        # --- 修改部分开始 ---
-        # 移除了原有的对 doubao-seedance-1-0-pro 模型的尾帧限制
-        # --- 修改部分结束 ---
-
         final_model_name = ""
         if model_choice == "doubao-seedance-1-0-pro":
             final_model_name = "doubao-seedance-1-0-pro-250528"
@@ -497,4 +493,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengVideoGeneration": "Jimeng Video Generation",
     "JimengReferenceImage2Video": "Jimeng Reference to Video",
     "JimengTaskStatusChecker": "Jimeng Task Status Checker",
+
 }
