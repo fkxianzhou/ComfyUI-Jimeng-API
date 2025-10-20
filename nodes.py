@@ -213,8 +213,8 @@ class JimengSeedream3:
                 "image": ("IMAGE",),
             }
         }
-    RETURN_TYPES = ("IMAGE", "INT")
-    RETURN_NAMES = ("image", "seed")
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("image", "response")
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
@@ -269,7 +269,7 @@ class JimengSeedream3:
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
                 if image_tensor is None:
                     raise RuntimeError("Failed to download the generated image.")
-                return (image_tensor, actual_seed)
+                return (image_tensor, resp.model_dump_json())
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
@@ -296,8 +296,8 @@ class JimengSeedream4:
                 "images": ("IMAGE",),
             }
         }
-    RETURN_TYPES = ("IMAGE", "INT")
-    RETURN_NAMES = ("images", "seed")
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("images", "response")
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
@@ -350,7 +350,7 @@ class JimengSeedream4:
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
                 if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
-                return (torch.cat(valid_tensors, dim=0), actual_seed)
+                return (torch.cat(valid_tensors, dim=0), resp.model_dump_json())
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
@@ -378,8 +378,8 @@ class JimengVideoGeneration:
                 "last_frame_image": ("IMAGE",)
             }
         }
-    RETURN_TYPES = ("VIDEO", "IMAGE",)
-    RETURN_NAMES = ("video", "last_frame",)
+    RETURN_TYPES = ("VIDEO", "IMAGE", "STRING")
+    RETURN_NAMES = ("video", "last_frame", "response")
     FUNCTION = "generate"
     OUTPUT_NODE = False 
     CATEGORY = GLOBAL_CATEGORY
@@ -439,11 +439,11 @@ class JimengVideoGeneration:
 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return (VideoFromFile(video_path), last_frame_tensor,)
+                return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
                 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return (None, None,)
+                return (None, None, str(e))
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
@@ -466,8 +466,8 @@ class JimengReferenceImage2Video:
             "ref_image_3": ("IMAGE",),
             "ref_image_4": ("IMAGE",),
         } }
-    RETURN_TYPES = ("VIDEO", "IMAGE",)
-    RETURN_NAMES = ("video", "last_frame",)
+    RETURN_TYPES = ("VIDEO", "IMAGE", "STRING")
+    RETURN_NAMES = ("video", "last_frame", "response")
     FUNCTION = "generate"
     OUTPUT_NODE = False
     CATEGORY = GLOBAL_CATEGORY
@@ -505,11 +505,11 @@ class JimengReferenceImage2Video:
 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return (VideoFromFile(video_path), last_frame_tensor,)
+                return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return (None, None,)
+                return (None, None, str(e))
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
