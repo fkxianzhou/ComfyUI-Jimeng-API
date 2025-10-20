@@ -11,7 +11,7 @@
       - `即梦视频生成`: **统一的核心视频生成节点**。通过不同的输入组合，支持**文生视频**、**图生视频（首帧）以及首尾帧生视频**三种模式，并可智能切换 `lite` 模型版本。
       - `即梦参考图生视频 (Ref-I2V)`: 使用 1 至 4 张参考图像影响视频的生成结果（最高支持 `720p`）。
   - **工具节点**:
-      - `即梦API客户端 (Jimeng Client)`: **（必须）** 从配置文件 `api_keys.json` 读取密钥（[从此获取 Key](https://console.volcengine.com/ark/region:cn-beijing/apiKey)）。
+      - `即梦API客户端 (Jimeng Client)`: **（必须）** 从配置文件 `api_keys.json` 读取密钥（[从此获取 Key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)）。
       - `即梦任务状态检查器 (Jimeng Task Status Checker)`: 手动查询视频任务的状态和结果。
 
 ## 安装与更新
@@ -145,3 +145,4 @@
       - `created_at (STRING)`: 创建时间。
 
       - `updated_at (STRING)`: 更新时间。
+
