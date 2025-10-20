@@ -1,4 +1,3 @@
-# --- 1. 导入所需模块 ---
 import os
 import io
 import time
@@ -13,29 +12,22 @@ import numpy
 import PIL.Image
 import torch
 
-# 导入OpenAI的异步客户端和火山引擎的原生SDK客户端
 from openai import AsyncOpenAI
 from volcenginesdkarkruntime import Ark
 import folder_paths
+import comfy.model_management
 
-# --- 2. 全局设置 ---
-# 为所有节点定义一个统一的分类名，方便在ComfyUI菜单中查找。
 GLOBAL_CATEGORY = "JimengAI"
 
-# --- 3. 配置文件和辅助函数 ---
-
-# 获取当前文件所在的目录，用于定位配置文件
 jimeng_api_dir = os.path.dirname(os.path.abspath(__file__))
-# 定义配置文件的路径
 API_KEYS_FILE = os.path.join(jimeng_api_dir, "api_keys.json")
 
-# 用于缓存从文件中读取的API密钥
 API_KEYS_CONFIG = []
 
 def load_api_keys():
     """从 api_keys.json 文件加载API密钥。"""
     global API_KEYS_CONFIG
-    API_KEYS_CONFIG = [] # 每次加载前先清空
+    API_KEYS_CONFIG = []
     if not os.path.exists(API_KEYS_FILE):
         print(f"[JimengAI] Info: API keys file not found. Please rename 'api_keys.json.example' to 'api_keys.json' and fill in your keys.")
         return
@@ -52,7 +44,6 @@ def load_api_keys():
     except Exception as e:
         print(f"[JimengAI] Error: Failed to load 'api_keys.json': {e}")
 
-# ComfyUI启动时执行一次，加载密钥
 load_api_keys()
 
 async def _fetch_data_from_url_async(session: aiohttp.ClientSession, url: str) -> bytes:
@@ -111,32 +102,46 @@ def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
         if f"--{i}" in prompt: raise ValueError(f"Parameter '--{i}' is not allowed in the prompt. Please use the node's widget for this value.")
 
 async def _poll_task_until_completion_async(client, task_id: str, timeout=600, interval=5):
-    """【异步】轮询任务状态，直到任务完成、失败或超时。"""
+    """【异步】轮询任务状态，支持中断。"""
     start_time = time.time()
-    while time.time() - start_time < timeout:
-        try:
-            get_result = await asyncio.to_thread(client.content_generation.tasks.get, task_id=task_id)
-            if get_result.status == "succeeded": return get_result
-            elif get_result.status in ["failed", "cancelled"]:
-                error = getattr(get_result, 'error', None)
-                if error: raise RuntimeError(f"Task failed with code: {error.code}, message: {error.message}")
-                else: raise RuntimeError(f"Task failed with status: {get_result.status}")
-        except Exception as e:
-            if isinstance(e, RuntimeError): raise e
-            print(f"Failed to get task status, retrying... Error: {e}")
-        await asyncio.sleep(interval)
-    raise TimeoutError(f"Task polling timed out after {timeout} seconds for task_id: {task_id}")
+    try:
+        while time.time() - start_time < timeout:
+            comfy.model_management.throw_exception_if_processing_interrupted()
 
-# --- 4. 节点类定义 ---
+            try:
+                get_result = await asyncio.to_thread(client.content_generation.tasks.get, task_id=task_id)
+                if get_result.status == "succeeded": return get_result
+                elif get_result.status in ["failed", "cancelled"]:
+                    error = getattr(get_result, 'error', None)
+                    if error: raise RuntimeError(f"Task failed with code: {error.code}, message: {error.message}")
+                    else: raise RuntimeError(f"Task failed with status: {get_result.status}")
+            except Exception as e:
+                if isinstance(e, RuntimeError): raise e
+                if isinstance(e, comfy.model_management.InterruptProcessingException): raise e
+                print(f"Failed to get task status, retrying... Error: {e}")
+            
+            await asyncio.sleep(interval)
+        
+        raise TimeoutError(f"Task polling timed out after {timeout} seconds for task_id: {task_id}")
+    
+    except comfy.model_management.InterruptProcessingException as e:
+        print(f"[JimengAI] Info: Interruption detected for task {task_id}. Attempting to cancel task on API...")
+        try:
+            await asyncio.to_thread(client.content_generation.tasks.delete, task_id=task_id)
+            print(f"[JimengAI] Info: Sent cancellation request for task {task_id}.")
+        except Exception as delete_e:
+            print(f"[JimengAI] Warning: Failed to send cancellation request for task {task_id}. This is OK. Error: {delete_e}")
+        
+        raise e
 
 class JimengClients:
-    """一个简单的容器类，用于同时持有两种API客户端。"""
+    """持有OpenAI和Ark两种API客户端的容器。"""
     def __init__(self, openai_client, ark_client):
         self.openai = openai_client
         self.ark = ark_client
 
 class JimengAPIClient:
-    """节点功能：从配置文件加载API密钥，并创建统一的客户端供后续节点使用。"""
+    """加载API密钥并创建统一的客户端。"""
     @classmethod
     def INPUT_TYPES(s):
         key_names = [key["customName"] for key in API_KEYS_CONFIG]
@@ -163,12 +168,11 @@ class JimengAPIClient:
         openai_client = AsyncOpenAI(api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3")
         ark_client = Ark(api_key=api_key)
         
-        # 返回一个包含两个客户端的容器对象
         clients = JimengClients(openai_client, ark_client)
         return (clients,)
 
 class JimengSeedream3:
-    """节点功能：根据文本或图片输入生成图片（Seedream 3 & Seededit 3）。"""
+    """Seedream 3 & Seededit 3 图像生成。"""
     RECOMMENDED_SIZES = ["1024x1024 (1:1)", "864x1152 (3:4)", "1152x864 (4:3)", "1280x720 (16:9)", "720x1280 (9:16)", "832x1248 (2:3)", "1248x832 (3:2)", "1512x648 (21:9)"]
     
     @classmethod
@@ -204,12 +208,9 @@ class JimengSeedream3:
         
         size_param = size.split(" ")[0]
 
-        # 根据是否有图像输入来选择模型和参数
         if image is None:
-            # 文生图模式
             model_id = "doubao-seedream-3-0-t2i-250415"
         else:
-            # 图生图（编辑）模式
             model_id = "doubao-seededit-3-0-i2i-250628"
             image_b64 = f"data:image/jpeg;base64,{_image_to_base64(image)}"
             extra_body["image"] = image_b64
@@ -217,6 +218,8 @@ class JimengSeedream3:
 
         async with aiohttp.ClientSession() as session:
             try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 resp = await openai_client.images.generate(
                     model=model_id,
                     prompt=prompt,
@@ -224,15 +227,20 @@ class JimengSeedream3:
                     response_format="url",
                     extra_body=extra_body
                 )
+                
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
                 if image_tensor is None:
                     raise RuntimeError("Failed to download the generated image.")
                 return (image_tensor, actual_seed)
             except Exception as e:
+                if isinstance(e, comfy.model_management.InterruptProcessingException):
+                    raise e
                 raise RuntimeError(f"Failed to generate image with model {model_id}: {e}")
 
 class JimengSeedream4:
-    """节点功能：使用Seedream4模型进行文生图、图生图，并支持单图/组图模式。"""
+    """Seedream4 文生图与图生图。"""
     RECOMMENDED_SIZES = [ "Custom", "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
     @classmethod
     def INPUT_TYPES(s):
@@ -268,7 +276,6 @@ class JimengSeedream4:
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         
         if size == "Custom":
-            # Validate custom dimensions
             total_pixels = width * height
             min_pixels = 1280 * 720
             max_pixels = 4096 * 4096
@@ -294,20 +301,27 @@ class JimengSeedream4:
         if sequential_image_generation == "auto":
             extra_body['sequential_image_generation_options'] = {"max_images": max_images}
 
-        openai_client = client.openai # 从容器中获取openai客户端
+        openai_client = client.openai
         async with aiohttp.ClientSession() as session:
             try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 resp = await openai_client.images.generate(model="doubao-seedream-4-0-250828", prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
+                
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 download_tasks = [_download_url_to_image_tensor_async(session, item.url) for item in resp.data]
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
                 if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
                 return (torch.cat(valid_tensors, dim=0), actual_seed)
             except Exception as e:
+                if isinstance(e, comfy.model_management.InterruptProcessingException):
+                    raise e
                 raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
 
 class JimengVideoGeneration:
-    """节点功能：根据文本或图片输入（首帧/尾帧）生成视频，并直接预览结果。"""
+    """使用 doubao-seedance 模型生成视频。"""
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
@@ -324,7 +338,7 @@ class JimengVideoGeneration:
             },
             "optional": {
                 "save_path": ("STRING", {"default": "Jimeng"}),
-                "image": ("IMAGE",), # Represents the first frame
+                "image": ("IMAGE",),
                 "last_frame_image": ("IMAGE",)
             }
         }
@@ -351,15 +365,12 @@ class JimengVideoGeneration:
         
         content = [{"type": "text", "text": prompt_string}]
         
-        # 添加首帧图像
         if image is not None:
             first_frame_b64 = _image_to_base64(image)
             first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
             content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
         
-        # 添加尾帧图像
         if last_frame_image is not None:
-            # 确保有首帧才能有尾帧
             if image is None:
                 raise ValueError("A first frame image must be provided when using a last frame image.")
             last_frame_b64 = _image_to_base64(last_frame_image)
@@ -369,13 +380,18 @@ class JimengVideoGeneration:
         ark_client = client.ark
         async with aiohttp.ClientSession() as session:
             try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 create_result = await asyncio.to_thread(ark_client.content_generation.tasks.create, model=final_model_name, content=content, return_last_frame=True)
                 task_id = create_result.id
             except Exception as e:
+                if isinstance(e, comfy.model_management.InterruptProcessingException):
+                    raise e
                 raise RuntimeError(f"Failed to create task: {e}")
             
             try:
                 final_result = await _poll_task_until_completion_async(ark_client, task_id)
+                
                 video_url = final_result.content.video_url
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
                 
@@ -389,9 +405,11 @@ class JimengVideoGeneration:
             except (RuntimeError, TimeoutError) as e:
                 print(e)
                 return {"ui": {"video": []}}
+            except comfy.model_management.InterruptProcessingException as e:
+                raise e
 
 class JimengReferenceImage2Video:
-    """节点功能：根据一张或多张参考图生成视频，并直接预览。"""
+    """根据参考图生成视频。"""
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
     @classmethod
     def INPUT_TYPES(s):
@@ -425,12 +443,17 @@ class JimengReferenceImage2Video:
         for img_tensor in ref_images:
             if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
         if len(content) == 1: raise ValueError("At least one reference image must be provided.")
-        ark_client = client.ark # 从容器中获取ark客户端
+        ark_client = client.ark
         async with aiohttp.ClientSession() as session:
             try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
                 create_result = await asyncio.to_thread( ark_client.content_generation.tasks.create, model=model, content=content, return_last_frame=True )
                 task_id = create_result.id
-            except Exception as e: raise RuntimeError(f"Failed to create task: {e}")
+            except Exception as e: 
+                if isinstance(e, comfy.model_management.InterruptProcessingException):
+                    raise e
+                raise RuntimeError(f"Failed to create task: {e}")
             try:
                 final_result = await _poll_task_until_completion_async(ark_client, task_id)
                 video_url = final_result.content.video_url
@@ -445,9 +468,11 @@ class JimengReferenceImage2Video:
             except (RuntimeError, TimeoutError) as e:
                 print(e)
                 return {"ui": {"video": []}}
+            except comfy.model_management.InterruptProcessingException as e:
+                raise e
 
 class JimengTaskStatusChecker:
-    """节点功能：手动输入一个任务ID来查询其状态和结果。"""
+    """手动查询任务ID的状态和结果。"""
     @classmethod
     def INPUT_TYPES(s):
         return { "required": { "client": ("JIMENG_CLIENT",), "task_id": ("STRING", {"forceInput": True}), } }
@@ -459,7 +484,7 @@ class JimengTaskStatusChecker:
     
     async def check_status(self, client, task_id):
         if not task_id: return ("", "", "no task_id provided", "Error: Task ID is empty.", "", "", "")
-        ark_client = client.ark # 从容器中获取ark客户端
+        ark_client = client.ark
         try:
             get_result = await asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=task_id)
             status, model = get_result.status, get_result.model
@@ -475,7 +500,6 @@ class JimengTaskStatusChecker:
         except Exception as e:
             return ("", "", "api_error", f"API Error: {e}", "", "", "")
 
-# --- 5. 节点注册 ---
 NODE_CLASS_MAPPINGS = {
     "JimengAPIClient": JimengAPIClient,
     "JimengSeedream3": JimengSeedream3,
@@ -485,7 +509,6 @@ NODE_CLASS_MAPPINGS = {
     "JimengTaskStatusChecker": JimengTaskStatusChecker,
 }
 
-# 节点在UI中显示的名称
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengAPIClient": "Jimeng API Client",
     "JimengSeedream3": "Jimeng Seedream 3",
