@@ -132,8 +132,8 @@
             "seed": {
                 "name": "种子"
             },
-            "save_path": {
-                "name": "保存路径"
+            "save_path_in_temp": {
+                "name": "临时保存路径"
             },
             "image": {
                 "name": "首帧图像"
@@ -144,6 +144,9 @@
         },
         "outputs": {
             "0": {
+                "name": "视频"
+            },
+            "1": {
                 "name": "最后一帧"
             }
         }
@@ -169,8 +172,8 @@
             "seed": {
                 "name": "种子"
             },
-            "save_path": {
-                "name": "保存路径"
+            "save_path_in_temp": {
+                "name": "临时保存路径"
             },
             "ref_image_1": {
                 "name": "参考图 1"
@@ -187,6 +190,9 @@
         },
         "outputs": {
             "0": {
+                "name": "视频"
+            },
+            "1": {
                 "name": "最后一帧"
             }
         }
