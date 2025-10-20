@@ -173,7 +173,7 @@ class JimengAPIClient:
 
 class JimengSeedream3:
     """Seedream 3 & Seededit 3 图像生成。"""
-    RECOMMENDED_SIZES = ["1024x1024 (1:1)", "864x1152 (3:4)", "1152x864 (4:3)", "1280x720 (16:9)", "720x1280 (9:16)", "832x1248 (2:3)", "1248x832 (3:2)", "1512x648 (21:9)"]
+    RECOMMENDED_SIZES = ["Custom", "1024x1024 (1:1)", "864x1152 (3:4)", "1152x864 (4:3)", "1280x720 (16:9)", "720x1280 (9:16)", "832x1248 (2:3)", "1248x832 (3:2)", "1512x648 (21:9)"]
     
     @classmethod
     def INPUT_TYPES(s):
@@ -182,6 +182,8 @@ class JimengSeedream3:
                 "client": ("JIMENG_CLIENT",),
                 "prompt": ("STRING", {"multiline": True, "default": ""}),
                 "size": (s.RECOMMENDED_SIZES,),
+                "width": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
+                "height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                 "seed": ("INT", {"default": -1, "min": -1, "max": 2147483647}),
                 "guidance_scale": ("FLOAT", {"default": 5.0, "min": 1.0, "max": 10.0, "step": 0.1}),
                 "watermark": ("BOOLEAN", {"default": False}),
@@ -195,7 +197,7 @@ class JimengSeedream3:
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, size, seed, guidance_scale, watermark, image=None):
+    async def generate(self, client, prompt, size, width, height, seed, guidance_scale, watermark, image=None):
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         openai_client = client.openai
 
@@ -206,7 +208,20 @@ class JimengSeedream3:
             "watermark": watermark
         }
         
-        size_param = size.split(" ")[0]
+        if size == "Custom":
+            total_pixels = width * height
+            min_pixels = 512 * 512  
+            max_pixels = 2048 * 2048 
+            if not (min_pixels <= total_pixels <= max_pixels):
+                raise ValueError(f"Total pixels must be between {min_pixels} (512x512) and {max_pixels} (2048x2048). Your current: {total_pixels}")
+
+            aspect_ratio = width / height
+            if not (1/16 <= aspect_ratio <= 16):
+                raise ValueError(f"Aspect ratio must be between 1/16 and 16. Your current: {aspect_ratio}")
+                
+            size_param = f"{width}x{height}"
+        else:
+            size_param = size.split(" ")[0]
 
         if image is None:
             model_id = "doubao-seedream-3-0-t2i-250415"
