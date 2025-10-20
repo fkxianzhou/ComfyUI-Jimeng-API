@@ -17,6 +17,16 @@ from volcenginesdkarkruntime import Ark
 import folder_paths
 import comfy.model_management
 
+try:
+    from comfy_api.input_impl import VideoFromFile
+except ImportError:
+    print(f"[JimengAI] Warning: 'comfy_api' not found. Video output nodes may not function correctly.")
+    print(f"[JimengAI] Info: This is normal if you are running ComfyUI in --disable-api-save-load mode.")
+    class VideoFromFile:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("Failed to import 'comfy_api.input_impl.VideoFromFile'. Please ensure comfy_api is available.")
+
+
 GLOBAL_CATEGORY = "JimengAI"
 
 jimeng_api_dir = os.path.dirname(os.path.abspath(__file__))
@@ -78,23 +88,34 @@ async def _download_url_to_image_tensor_async(session: aiohttp.ClientSession, ur
         print(f"异步下载或转换图片失败，URL: {url}，错误: {e}")
         return None
 
-async def _download_and_save_video_async(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> dict:
-    """【异步】下载视频并保存，返回UI预览数据。"""
-    if not video_url: return {"ui": {"video": []}}
+async def _download_and_save_video_async_return_path(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> str | None:
+    """【异步】下载视频并保存到临时目录，返回完整文件路径。"""
+    if not video_url: return None
     if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
 
+    output_dir = folder_paths.get_temp_directory()
+    
     if save_path:
-        filename_prefix = os.path.join(save_path, filename_prefix)
-
-    output_dir = folder_paths.get_output_directory()
+        output_dir = os.path.join(output_dir, save_path)
+        
     (full_output_folder, filename, _, subfolder, _) = folder_paths.get_save_image_path(filename_prefix, output_dir)
+    
+    os.makedirs(full_output_folder, exist_ok=True)
+    
     file_ext = video_url.split('.')[-1].split('?')[0]
+    if not file_ext: file_ext = "mp4"
+    
     final_filename = f"{filename}_{random.randint(1, 10000)}.{file_ext}"
     final_path = os.path.join(full_output_folder, final_filename)
-    data = await _fetch_data_from_url_async(session, video_url)
-    with open(final_path, "wb") as f: f.write(data)
-    preview_data = [{"filename": final_filename, "subfolder": subfolder, "type": "output"}]
-    return {"ui": {"images": preview_data, "animated": (True,)}}
+    
+    try:
+        data = await _fetch_data_from_url_async(session, video_url)
+        with open(final_path, "wb") as f: f.write(data)
+        return final_path
+    except Exception as e:
+        print(f"[JimengAI] Error: Failed to download or save video to temp path: {final_path}. Error: {e}")
+        return None
+
 
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
     """检查提示词中是否包含了不应出现的命令行风格参数。"""
@@ -352,18 +373,18 @@ class JimengVideoGeneration:
                 "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
             },
             "optional": {
-                "save_path": ("STRING", {"default": "Jimeng"}),
+                "save_path_in_temp": ("STRING", {"default": "Jimeng"}),
                 "image": ("IMAGE",),
                 "last_frame_image": ("IMAGE",)
             }
         }
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("last_frame",)
+    RETURN_TYPES = ("VIDEO", "IMAGE",)
+    RETURN_NAMES = ("video", "last_frame",)
     FUNCTION = "generate"
-    OUTPUT_NODE = True
+    OUTPUT_NODE = False 
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path, image=None, last_frame_image=None):
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path_in_temp, image=None, last_frame_image=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "camerafixed", "seed"])
 
         final_model_name = ""
@@ -411,15 +432,18 @@ class JimengVideoGeneration:
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
                 
                 filename_prefix = "Jimeng_VideoGen"
-                ui_data = await _download_and_save_video_async(session, video_url, filename_prefix, actual_seed, save_path)
+                video_path = await _download_and_save_video_async_return_path(session, video_url, filename_prefix, actual_seed, save_path_in_temp)
                 
+                if video_path is None:
+                    raise RuntimeError("Failed to download or save video from API.")
+
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return {"ui": ui_data["ui"], "result": (last_frame_tensor,)}
+                return (VideoFromFile(video_path), last_frame_tensor,)
                 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return {"ui": {"video": []}}
+                return (None, None,)
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
@@ -436,19 +460,19 @@ class JimengReferenceImage2Video:
             "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
             "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
         }, "optional": {
-            "save_path": ("STRING", {"default": "Jimeng"}),
+            "save_path_in_temp": ("STRING", {"default": "Jimeng"}),
             "ref_image_1": ("IMAGE",),
             "ref_image_2": ("IMAGE",),
             "ref_image_3": ("IMAGE",),
             "ref_image_4": ("IMAGE",),
         } }
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("last_frame",)
+    RETURN_TYPES = ("VIDEO", "IMAGE",)
+    RETURN_NAMES = ("video", "last_frame",)
     FUNCTION = "generate"
-    OUTPUT_NODE = True
+    OUTPUT_NODE = False
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, save_path, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
+    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, save_path_in_temp, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "seed"])
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
         model = "doubao-seedance-1-0-lite-i2v-250428"
@@ -474,15 +498,18 @@ class JimengReferenceImage2Video:
                 video_url = final_result.content.video_url
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
 
-                ui_data = await _download_and_save_video_async(session, video_url, "Jimeng_Ref-I2V", actual_seed, save_path)
-                
+                video_path = await _download_and_save_video_async_return_path(session, video_url, "Jimeng_Ref-I2V", actual_seed, save_path_in_temp)
+
+                if video_path is None:
+                    raise RuntimeError("Failed to download or save video from API.")
+
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return {"ui": ui_data["ui"], "result": (last_frame_tensor,)}
+                return (VideoFromFile(video_path), last_frame_tensor,)
 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return {"ui": {"video": []}}
+                return (None, None,)
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
