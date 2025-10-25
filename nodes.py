@@ -364,9 +364,9 @@ class JimengVideoGeneration:
         return {
             "required": {
                 "client": ("JIMENG_CLIENT",),
-                "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}),
+                "model_choice": (["doubao-seedance-1-0-pro", "doubao-seedance-1-0-pro-fast", "doubao-seedance-1-0-lite"], {"default": "doubao-seedance-1-0-pro"}),
                 "prompt": ("STRING", {"multiline": True, "default": ""}),
-                "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}),
+                "duration": ("INT", {"default": 5, "min": 2, "max": 12, "step": 1}),
                 "resolution": (["480p", "720p", "1080p"], {"default": "720p"}),
                 "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
                 "camerafixed": ("BOOLEAN", {"default": True}),
@@ -390,6 +390,8 @@ class JimengVideoGeneration:
         final_model_name = ""
         if model_choice == "doubao-seedance-1-0-pro":
             final_model_name = "doubao-seedance-1-0-pro-250528"
+        elif model_choice == "doubao-seedance-1-0-pro-fast":
+            final_model_name = "doubao-seedance-1-0-pro-fast-251015"
         elif model_choice == "doubao-seedance-1-0-lite":
             if image is None:
                 final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
@@ -407,6 +409,8 @@ class JimengVideoGeneration:
             content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
         
         if last_frame_image is not None:
+            if model_choice == "doubao-seedance-1-0-pro-fast":
+                raise ValueError(f"Model '{model_choice}' does not support last_frame_image. Please disconnect the last_frame_image input.")
             if image is None:
                 raise ValueError("A first frame image must be provided when using a last frame image.")
             last_frame_b64 = _image_to_base64(last_frame_image)
@@ -455,7 +459,7 @@ class JimengReferenceImage2Video:
         return { "required": {
             "client": ("JIMENG_CLIENT",),
             "prompt": ("STRING", {"multiline": True, "default": ""}),
-            "duration": ("INT", {"default": 5, "min": 3, "max": 12, "step": 1}),
+            "duration": ("INT", {"default": 5, "min": 2, "max": 12, "step": 1}),
             "resolution": (["480p", "720p"], {"default": "720p"}),
             "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
             "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
