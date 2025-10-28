@@ -447,7 +447,7 @@ class JimengVideoGeneration:
                 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return (None, None, str(e))
+                raise e
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
@@ -513,7 +513,7 @@ class JimengReferenceImage2Video:
 
             except (RuntimeError, TimeoutError) as e:
                 print(e)
-                return (None, None, str(e))
+                raise e
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
 
