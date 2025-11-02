@@ -40,14 +40,14 @@ HISTORY_PAGE_SIZE = 50
 MIN_DATA_POINTS = 3
 OUTLIER_STD_DEV_FACTOR = 2.0 
 
-async def _get_api_estimated_time_async(ark_client, model_name: str, duration: int) -> int:
+async def _get_api_estimated_time_async(ark_client, model_name: str, duration: int, resolution: str) -> int:
     """
     【异步】通过查询 API 历史任务来获取预估时间。
     会自动过滤掉与当前参数不符的任务，并剔除统计异常值。
     """
     fallback_time = (int(duration) * DEFAULT_FALLBACK_PER_SEC) + DEFAULT_FALLBACK_BASE
     
-    print(f"[JimengAI] Info: Fetching task history for '{model_name}' (duration≈{duration}s) to estimate time...")
+    print(f"[JimengAI] Info: Fetching task history for '{model_name}' (duration≈{duration}s, resolution={resolution}) to estimate time...")
     
     try:
         resp = await asyncio.to_thread(
@@ -63,13 +63,20 @@ async def _get_api_estimated_time_async(ark_client, model_name: str, duration: i
 
         timings = []
         for item in resp.items:
-            if item.status == "succeeded" and hasattr(item, 'duration') and item.duration == int(duration):
-                task_time = item.updated_at - item.created_at
-                if task_time > 0:
-                    timings.append(task_time)
+
+            if not (item.status == "succeeded" and hasattr(item, 'duration') and item.duration == int(duration)):
+                continue
+            
+
+            if not (hasattr(item, 'resolution') and item.resolution == resolution):
+                continue
+
+            task_time = item.updated_at - item.created_at
+            if task_time > 0:
+                timings.append(task_time)
         
         if len(timings) < MIN_DATA_POINTS:
-            print(f"[JimengAI] Info: Not enough historical data (<{MIN_DATA_POINTS} runs) found for duration {duration}s. Using fallback estimate.")
+            print(f"[JimengAI] Info: Not enough historical data (<{MIN_DATA_POINTS} runs) found for duration {duration}s and resolution {resolution}. Using fallback estimate.")
             return fallback_time
 
         mean = sum(timings) / len(timings)
@@ -327,7 +334,7 @@ class JimengVideoGeneration:
 
         ark_client = client.ark
 
-        estimated_max_time = await _get_api_estimated_time_async(ark_client, final_model_name, estimation_duration)
+        estimated_max_time = await _get_api_estimated_time_async(ark_client, final_model_name, estimation_duration, resolution)
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -360,7 +367,6 @@ class JimengVideoGeneration:
                 return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
                 
             except (RuntimeError, TimeoutError) as e:
-                print(e)
                 raise e
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
@@ -416,7 +422,7 @@ class JimengReferenceImage2Video:
         
         ark_client = client.ark
 
-        estimated_max_time = await _get_api_estimated_time_async(ark_client, model, estimation_duration) 
+        estimated_max_time = await _get_api_estimated_time_async(ark_client, model, estimation_duration, resolution) 
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -447,7 +453,6 @@ class JimengReferenceImage2Video:
                 return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
 
             except (RuntimeError, TimeoutError) as e:
-                print(e)
                 raise e
             except comfy.model_management.InterruptProcessingException as e:
                 raise e
