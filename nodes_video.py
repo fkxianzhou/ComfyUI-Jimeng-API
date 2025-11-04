@@ -177,11 +177,13 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
     """【异步】轮询任务状态，支持中断和模拟进度。"""
     start_time = time.time()
     info_printed = False
+    overtime_warning_printed = False
     
     if estimated_max <= 0: 
         estimated_max = 1 
         
     ps_instance = PromptServer.instance 
+    current_max = estimated_max
 
     try:
         while time.time() - start_time < timeout:
@@ -204,18 +206,23 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
                     info_printed = True
 
                 if get_result.status == "succeeded":
-                    print(f"[JimengAI] Task {task_id}: Succeeded. (Total time: {int(time.time() - start_time)}s)          ")
+                    final_elapsed = int(time.time() - start_time)
+                    current_max = max(estimated_max, final_elapsed)
+                    print(f"[JimengAI] Task {task_id}: Succeeded. (Total time: {final_elapsed}s)          ")
                     if node_id and ps_instance:
-                        ps_instance.send_sync("progress", {"value": estimated_max, "max": estimated_max, "node": node_id})
+                        ps_instance.send_sync("progress", {"value": current_max, "max": current_max, "node": node_id}) # <-- [FIX] (1) end
                     return get_result
                 elif get_result.status in ["failed", "cancelled"]:
-                    print(f"[JimengAI] Task {task_id}: Failed or Cancelled.                                                ")
+                    current_max = max(estimated_max, int(time.time() - start_time))
                     if node_id and ps_instance:
-                        ps_instance.send_sync("progress", {"value": 0, "max": estimated_max, "node": node_id})
+                        ps_instance.send_sync("progress", {"value": 0, "max": current_max, "node": node_id})
                     
                     error = getattr(get_result, 'error', None)
-                    if error: raise RuntimeError(f"Task failed with code: {error.code}, message: {error.message}")
-                    else: raise RuntimeError(f"Task failed with status: {get_result.status}")
+                    
+                    if error: 
+                        raise RuntimeError(f"[JimengAI] Task {task_id} Failed. Code: {error.code}, Message: {error.message}")
+                    else: 
+                        raise RuntimeError(f"[JimengAI] Task {task_id} Failed. Status: {get_result.status}")
             except Exception as e:
                 if isinstance(e, RuntimeError): raise e
                 if isinstance(e, comfy.model_management.InterruptProcessingException): raise e
@@ -227,29 +234,41 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
                 print(f"Failed to get task status, retrying... Error: {e}")
             
             elapsed = time.time() - start_time
-            current_progress_value = min(int(elapsed), estimated_max) 
+            current_progress_value = int(elapsed)
             
+            if current_progress_value > estimated_max and not overtime_warning_printed:
+                print(f"\n[JimengAI] Warning: Task {task_id} is taking longer than estimated ({estimated_max}s). Continuing to wait...")
+                overtime_warning_printed = True
+            
+            current_max = max(estimated_max, current_progress_value)
+
             if node_id and ps_instance:
-                ps_instance.send_sync("progress", { 
+                ps_instance.send_sync("progress", {
                     "value": current_progress_value,
-                    "max": estimated_max,
+                    "max": current_max,
                     "node": node_id
                 })
             
             if info_printed:
-                print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {estimated_max}s elapsed...", end="\r")
+                if not overtime_warning_printed:
+                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {estimated_max}s elapsed...", end="\r")
+                else:
+                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {estimated_max}s (Est.) elapsed...", end="\r")
 
             await asyncio.sleep(interval)
         
+        current_max = max(estimated_max, int(time.time() - start_time))
         print(f"\n[JimengAI] Task {task_id}: Polling Timed Out.                                                ")
         if node_id and ps_instance: 
-            ps_instance.send_sync("progress", {"value": 0, "max": estimated_max, "node": node_id})
+            ps_instance.send_sync("progress", {"value": 0, "max": current_max, "node": node_id})
         raise TimeoutError(f"Task polling timed out after {timeout} seconds for task_id: {task_id}")
     
     except comfy.model_management.InterruptProcessingException as e:
+        current_max = max(estimated_max, int(time.time() - start_time))
         print(f"\n[JimengAI] Task {task_id}: Interrupted by user.                                             ")
         if node_id and ps_instance: 
-            ps_instance.send_sync("progress", {"value": 0, "max": estimated_max, "node": node_id})
+            ps_instance.send_sync("progress", {"value": 0, "max": current_max, "node": node_id})
+
         
         print(f"[JimengAI] Info: Interruption detected for task {task_id}. Attempting to cancel task on API...")
         try:
