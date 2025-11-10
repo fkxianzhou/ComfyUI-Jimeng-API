@@ -132,9 +132,6 @@
             "seed": {
                 "name": "种子"
             },
-            "save_path_in_temp": {
-                "name": "临时保存路径"
-            },
             "image": {
                 "name": "首帧图像"
             },
@@ -174,9 +171,6 @@
             },
             "seed": {
                 "name": "种子"
-            },
-            "save_path_in_temp": {
-                "name": "临时保存路径"
             },
             "ref_image_1": {
                 "name": "参考图 1"

@@ -3,6 +3,7 @@ import asyncio
 import aiohttp
 import torch
 import comfy.model_management
+import json
 
 from .nodes_shared import (
     GLOBAL_CATEGORY, 
@@ -87,7 +88,14 @@ class JimengSeedream3:
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
                 if image_tensor is None:
                     raise RuntimeError("Failed to download the generated image.")
-                return (image_tensor, resp.model_dump_json())
+                
+                output_response = {
+                    "model": resp.model,
+                    "created": resp.created,
+                    "url": resp.data[0].url,
+                    "revised_prompt": getattr(resp.data[0], 'revised_prompt', None)
+                }
+                return (image_tensor, json.dumps(output_response, indent=2))
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
@@ -168,7 +176,20 @@ class JimengSeedream4:
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
                 if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
-                return (torch.cat(valid_tensors, dim=0), resp.model_dump_json())
+                
+                image_data_list = []
+                for item in resp.data:
+                    image_data_list.append({
+                        "url": item.url,
+                        "revised_prompt": getattr(item, 'revised_prompt', None)
+                    })
+                
+                output_response = {
+                    "model": resp.model,
+                    "created": resp.created,
+                    "images": image_data_list
+                }
+                return (torch.cat(valid_tensors, dim=0), json.dumps(output_response, indent=2))
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e

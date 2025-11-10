@@ -38,12 +38,14 @@ DEFAULT_FALLBACK_PER_SEC = 12
 DEFAULT_FALLBACK_BASE = 20
 HISTORY_PAGE_SIZE = 50
 MIN_DATA_POINTS = 3
-OUTLIER_STD_DEV_FACTOR = 2.0 
+OUTLIER_STD_DEV_FACTOR = 2.0
+RECENT_TASK_COUNT = 5
+RECENT_SPIKE_FACTOR = 1.1
 
 async def _get_api_estimated_time_async(ark_client, model_name: str, duration: int, resolution: str) -> int:
     """
     【异步】通过查询 API 历史任务来获取预估时间。
-    会自动过滤掉与当前参数不符的任务，并剔除统计异常值。
+    支持三级估时策略：精确匹配、回归推断和默认回退。
     """
     fallback_time = (int(duration) * DEFAULT_FALLBACK_PER_SEC) + DEFAULT_FALLBACK_BASE
     
@@ -61,53 +63,105 @@ async def _get_api_estimated_time_async(ark_client, model_name: str, duration: i
             print(f"[JimengAI] Info: No recent task history found for '{model_name}'. Using fallback estimate.")
             return fallback_time
 
-        timings = []
-        for item in resp.items:
+        exact_timings = []
+        recent_exact_timings = []
+        all_data_points = []
 
-            if not (item.status == "succeeded" and hasattr(item, 'duration') and item.duration == int(duration)):
+        for item in resp.items:
+            if not (item.status == "succeeded" and hasattr(item, 'resolution') and item.resolution == resolution):
                 continue
             
-
-            if not (hasattr(item, 'resolution') and item.resolution == resolution):
-                continue
-
+            item_duration = getattr(item, 'duration', 0)
             task_time = item.updated_at - item.created_at
-            if task_time > 0:
-                timings.append(task_time)
+
+            if task_time <= 0 or item_duration <= 0:
+                continue
+                
+            all_data_points.append((float(item_duration), float(task_time)))
+
+            if item_duration == int(duration):
+                exact_timings.append(task_time)
+                if len(recent_exact_timings) < RECENT_TASK_COUNT:
+                    recent_exact_timings.append(task_time)
         
-        if len(timings) < MIN_DATA_POINTS:
-            print(f"[JimengAI] Info: Not enough historical data (<{MIN_DATA_POINTS} runs) found for duration {duration}s and resolution {resolution}. Using fallback estimate.")
-            return fallback_time
+        if len(exact_timings) >= MIN_DATA_POINTS:
+            print(f"[JimengAI] Info: Found {len(exact_timings)} exact duration match(es). Using standard estimation.")
+            
+            mean = sum(exact_timings) / len(exact_timings)
+            variance = sum([(x - mean) ** 2 for x in exact_timings]) / len(exact_timings)
+            std_dev = math.sqrt(variance)
+            threshold = std_dev * OUTLIER_STD_DEV_FACTOR
 
-        mean = sum(timings) / len(timings)
-        variance = sum([(x - mean) ** 2 for x in timings]) / len(timings)
-        std_dev = math.sqrt(variance)
-
-        filtered_timings = []
-        outlier_count = 0
-        threshold = std_dev * OUTLIER_STD_DEV_FACTOR
-
-        for t in timings:
-            if abs(t - mean) < threshold:
-                filtered_timings.append(t)
+            filtered_timings = []
+            for t in exact_timings:
+                if abs(t - mean) < threshold:
+                    filtered_timings.append(t)
+            
+            if not filtered_timings:
+                print(f"[JimengAI] Warning: All exact matches were outliers.")
             else:
-                outlier_count += 1
-        
-        if outlier_count > 0:
-            print(f"[JimengAI] Info: Ignored {outlier_count} abnormally long task(s) (e.g., review, server lag) from estimation.")
+                historical_avg_time = sum(filtered_timings) / len(filtered_timings)
+                recent_avg_time = 0
+                if recent_exact_timings:
+                    recent_avg_time = sum(recent_exact_timings) / len(recent_exact_timings)
+                
+                final_avg_time = historical_avg_time
+                if recent_avg_time > historical_avg_time * RECENT_SPIKE_FACTOR:
+                    print(f"[JimengAI] Info: Recent tasks (avg {int(recent_avg_time)}s) are slower than historical avg ({int(historical_avg_time)}s).")
+                    print(f"[JimengAI] Info: Adjusting estimate to {int(recent_avg_time)}s due to high API load.")
+                    final_avg_time = recent_avg_time
+                
+                print(f"[JimengAI] Info: Estimated generation time based on {len(filtered_timings)} valid past run(s): {int(final_avg_time)}s")
+                return int(final_avg_time)
 
-        if not filtered_timings:
-            print(f"[JimengAI] Warning: All historical data was filtered as outliers. Using fallback estimate.")
+        print(f"[JimengAI] Info: Not enough exact data for {duration}s. Attempting linear regression from {len(all_data_points)} other tasks...")
+
+        if len(all_data_points) < MIN_DATA_POINTS:
+            print(f"[JimengAI] Info: Not enough data for regression. Using fallback estimate.")
             return fallback_time
 
-        final_avg_time = sum(filtered_timings) / len(filtered_timings)
-        print(f"[JimengAI] Info: Estimated generation time based on {len(filtered_timings)} valid past run(s): {int(final_avg_time)}s")
-        return int(final_avg_time)
+        all_times = [t for d, t in all_data_points]
+        mean_t = sum(all_times) / len(all_times)
+        std_dev_t = math.sqrt(sum([(t - mean_t) ** 2 for t in all_times]) / len(all_times))
+        threshold_t = std_dev_t * OUTLIER_STD_DEV_FACTOR
+        
+        filtered_data_points = []
+        for d, t in all_data_points:
+            if abs(t - mean_t) < threshold_t:
+                filtered_data_points.append((d, t))
+
+        if len(filtered_data_points) < MIN_DATA_POINTS:
+            print(f"[JimengAI] Info: Not enough regression data after outlier removal. Using fallback estimate.")
+            return fallback_time
+
+        x_list = [d for d, t in filtered_data_points]
+        y_list = [t for d, t in filtered_data_points]
+        n = float(len(x_list))
+        mean_x = sum(x_list) / n
+        mean_y = sum(y_list) / n
+        
+        numer = sum((x_list[i] - mean_x) * (y_list[i] - mean_y) for i in range(int(n)))
+        denom = sum((x_list[i] - mean_x) ** 2 for i in range(int(n)))
+
+        if denom == 0:
+            print(f"[JimengAI] Warning: Regression failed (zero variance in duration). Using fallback estimate.")
+            return fallback_time
+
+        m = numer / denom
+        b = mean_y - (m * mean_x)
+        
+        predicted_time = m * float(duration) + b
+        
+        if predicted_time < b or predicted_time < DEFAULT_FALLBACK_BASE:
+             print(f"[JimengAI] Info: Regression predicted an invalid time ({int(predicted_time)}s). Clamping to base cost.")
+             predicted_time = max(b, DEFAULT_FALLBACK_BASE)
+
+        print(f"[JimengAI] Info: Regression model (m={m:.2f}s/dur, b={b:.2f}s) estimated {int(predicted_time)}s for {duration}s.")
+        return int(predicted_time)
 
     except Exception as e:
         print(f"[JimengAI] Warning: Failed to fetch or analyze task history: {e}. Using fallback estimate.")
         return fallback_time
-
 
 async def _download_and_save_video_async_return_path(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> str | None:
     """【异步】下载视频并保存到临时目录，返回完整文件路径。"""
@@ -207,10 +261,7 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
 
                 if get_result.status == "succeeded":
                     final_elapsed = int(time.time() - start_time)
-                    current_max = max(estimated_max, final_elapsed)
                     print(f"[JimengAI] Task {task_id}: Succeeded. (Total time: {final_elapsed}s)          ")
-                    if node_id and ps_instance:
-                        ps_instance.send_sync("progress", {"value": current_max, "max": current_max, "node": node_id}) # <-- [FIX] (1) end
                     return get_result
                 elif get_result.status in ["failed", "cancelled"]:
                     current_max = max(estimated_max, int(time.time() - start_time))
@@ -236,24 +287,24 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
             elapsed = time.time() - start_time
             current_progress_value = int(elapsed)
             
-            if current_progress_value > estimated_max and not overtime_warning_printed:
-                print(f"\n[JimengAI] Warning: Task {task_id} is taking longer than estimated ({estimated_max}s). Continuing to wait...")
+            if current_progress_value > current_max and not overtime_warning_printed:
+                print(f"\n[JimengAI] Warning: Task {task_id} is taking longer than estimated ({current_max}s). Continuing to wait...")
                 overtime_warning_printed = True
             
-            current_max = max(estimated_max, current_progress_value)
+            value_to_send = min(current_progress_value, current_max - 1)
 
             if node_id and ps_instance:
                 ps_instance.send_sync("progress", {
-                    "value": current_progress_value,
+                    "value": value_to_send,
                     "max": current_max,
                     "node": node_id
                 })
             
             if info_printed:
                 if not overtime_warning_printed:
-                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {estimated_max}s elapsed...", end="\r")
+                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {current_max}s elapsed...", end="\r")
                 else:
-                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {estimated_max}s (Est.) elapsed...", end="\r")
+                    print(f"[JimengAI] Polling Task {task_id}: {current_progress_value}s / {current_max}s (Est.) elapsed...", end="\r")
 
             await asyncio.sleep(interval)
         
@@ -303,7 +354,6 @@ class JimengVideoGeneration:
                 "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
             },
             "optional": {
-                "save_path_in_temp": ("STRING", {"default": "Jimeng"}),
                 "image": ("IMAGE",),
                 "last_frame_image": ("IMAGE",)
             },
@@ -315,7 +365,7 @@ class JimengVideoGeneration:
     OUTPUT_NODE = False 
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, save_path_in_temp, image=None, last_frame_image=None, node_id=None):
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None, last_frame_image=None, node_id=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "camerafixed", "seed"])
 
         final_model_name = ""
@@ -376,14 +426,26 @@ class JimengVideoGeneration:
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
                 
                 filename_prefix = "Jimeng_VideoGen"
-                video_path = await _download_and_save_video_async_return_path(session, video_url, filename_prefix, actual_seed, save_path_in_temp)
+                video_path = await _download_and_save_video_async_return_path(session, video_url, filename_prefix, actual_seed, "Jimeng")
                 
                 if video_path is None:
                     raise RuntimeError("Failed to download or save video from API.")
 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
+                usage_info = getattr(final_result, 'usage', None)
+                
+                output_response = {
+                    "task_id": final_result.id,
+                    "status": final_result.status,
+                    "model": final_result.model,
+                    "created_at": final_result.created_at,
+                    "updated_at": final_result.updated_at,
+                    "video_url": getattr(final_result.content, 'video_url', None),
+                    "last_frame_url": getattr(final_result.content, 'last_frame_url', None),
+                    "usage": usage_info.model_dump() if usage_info else None
+                }
+                return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
                 
             except (RuntimeError, TimeoutError) as e:
                 raise e
@@ -409,7 +471,6 @@ class JimengReferenceImage2Video:
             "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
             "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
         }, "optional": {
-            "save_path_in_temp": ("STRING", {"default": "Jimeng"}),
             "ref_image_1": ("IMAGE",),
             "ref_image_2": ("IMAGE",),
             "ref_image_3": ("IMAGE",),
@@ -423,7 +484,7 @@ class JimengReferenceImage2Video:
     OUTPUT_NODE = False
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, save_path_in_temp, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None, node_id=None):
+    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None, node_id=None):
         _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "seed"])
         
         actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
@@ -462,14 +523,26 @@ class JimengReferenceImage2Video:
                 video_url = final_result.content.video_url
                 last_frame_url = getattr(final_result.content, 'last_frame_url', None)
 
-                video_path = await _download_and_save_video_async_return_path(session, video_url, "Jimeng_Ref-I2V", actual_seed, save_path_in_temp)
+                video_path = await _download_and_save_video_async_return_path(session, video_url, "Jimeng_Ref-I2V", actual_seed, "Jimeng")
 
                 if video_path is None:
                     raise RuntimeError("Failed to download or save video from API.")
 
                 last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
                 
-                return (VideoFromFile(video_path), last_frame_tensor, final_result.model_dump_json())
+                usage_info = getattr(final_result, 'usage', None)
+
+                output_response = {
+                    "task_id": final_result.id,
+                    "status": final_result.status,
+                    "model": final_result.model,
+                    "created_at": final_result.created_at,
+                    "updated_at": final_result.updated_at,
+                    "video_url": getattr(final_result.content, 'video_url', None),
+                    "last_frame_url": getattr(final_result.content, 'last_frame_url', None),
+                    "usage": usage_info.model_dump() if usage_info else None
+                }
+                return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
 
             except (RuntimeError, TimeoutError) as e:
                 raise e
