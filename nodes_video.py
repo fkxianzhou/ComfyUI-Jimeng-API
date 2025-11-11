@@ -42,11 +42,9 @@ OUTLIER_STD_DEV_FACTOR = 2.0
 RECENT_TASK_COUNT = 5
 RECENT_SPIKE_FACTOR = 1.1
 
+NON_BLOCKING_TASK_CACHE = {}
+
 async def _get_api_estimated_time_async(ark_client, model_name: str, duration: int, resolution: str) -> int:
-    """
-    【异步】通过查询 API 历史任务来获取预估时间。
-    支持三级估时策略：精确匹配、回归推断和默认回退。
-    """
     fallback_time = (int(duration) * DEFAULT_FALLBACK_PER_SEC) + DEFAULT_FALLBACK_BASE
     
     print(f"[JimengAI] Info: Fetching task history for '{model_name}' (duration≈{duration}s, resolution={resolution}) to estimate time...")
@@ -164,7 +162,6 @@ async def _get_api_estimated_time_async(ark_client, model_name: str, duration: i
         return fallback_time
 
 async def _download_and_save_video_async_return_path(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> str | None:
-    """【异步】下载视频并保存到临时目录，返回完整文件路径。"""
     if not video_url: return None
     if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
 
@@ -193,17 +190,10 @@ async def _download_and_save_video_async_return_path(session: aiohttp.ClientSess
 
 
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
-    """检查提示词中是否包含了不应出现的命令行风格参数。"""
     for i in text_params:
         if f"--{i}" in prompt: raise ValueError(f"Parameter '--{i}' is not allowed in the prompt. Please use the node's widget for this value.")
 
 def _calculate_duration_and_frames_args(duration: float) -> (str, int):
-    """
-    根据输入的时长（可以是小数），计算出 --dur 或 --frames 参数，
-    并返回一个用于历史估计的整数时长。
-
-    返回: (str: api_argument, int: estimation_duration)
-    """
     if duration == int(duration):
         int_duration = int(duration)
         return (f"--dur {int_duration}", int_duration)
@@ -228,7 +218,6 @@ def _calculate_duration_and_frames_args(duration: float) -> (str, int):
 
 
 async def _poll_task_until_completion_async(client, task_id: str, node_id: str, estimated_max: int, model_name: str, duration: int, timeout=600, interval=5):
-    """【异步】轮询任务状态，支持中断和模拟进度。"""
     start_time = time.time()
     info_printed = False
     overtime_warning_printed = False
@@ -332,8 +321,9 @@ async def _poll_task_until_completion_async(client, task_id: str, node_id: str, 
 
 
 class JimengVideoGeneration:
-    """使用 doubao-seedance 模型生成视频。"""
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
+    NON_BLOCKING_TASK_CACHE = NON_BLOCKING_TASK_CACHE
+    
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -352,6 +342,7 @@ class JimengVideoGeneration:
                 "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
                 "camerafixed": ("BOOLEAN", {"default": True}),
                 "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
+                "non_blocking": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "image": ("IMAGE",),
@@ -365,96 +356,165 @@ class JimengVideoGeneration:
     OUTPUT_NODE = False 
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, image=None, last_frame_image=None, node_id=None):
-        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "camerafixed", "seed"])
+    def _create_failure_json(self, error_message, task_id=None):
+        print(f"[JimengAI] Error: {error_message}")
+        raise RuntimeError(f"[JimengAI] Task {task_id or 'N/A'} failed: {error_message}")
 
-        final_model_name = ""
-        if model_choice == "doubao-seedance-1-0-pro":
-            final_model_name = "doubao-seedance-1-0-pro-250528"
-        elif model_choice == "doubao-seedance-1-0-pro-fast":
-            final_model_name = "doubao-seedance-1-0-pro-fast-251015"
-        elif model_choice == "doubao-seedance-1-0-lite":
-            if image is None:
-                final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
-            else:
-                final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
+    def _create_pending_json(self, status, task_id):
+        print(f"[JimengAI] Info: Task {task_id} is {status}. Run again to check results.")
         
-        actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
+        status_message_map = {
+            "submitted": "Task submitted. Execution paused. Please run the workflow again to check status.",
+            "queued": "Task is queued (waiting). Execution paused. Please run the workflow again in a moment.",
+            "pending": "Task is pending (in queue). Execution paused. Please run the workflow again in a moment.",
+            "running": "Task is actively running. Execution paused. Please run the workflow again in a moment.",
+            "processing": "Task is actively processing. Execution paused. Please run the workflow again in a moment.",
+        }
         
-        (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+        specific_message = status_message_map.get(status, 
+            f"Task is in an intermediate state ({status}). Execution paused. Please run the workflow again in a moment."
+        )
         
-        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
+        message = f"[JimengAI] Task {task_id}: {specific_message}"
+        raise RuntimeError(message)
         
-        content = [{"type": "text", "text": prompt_string}]
+    async def _handle_task_success_async(self, final_result, session):
+        video_url = final_result.content.video_url
+        last_frame_url = getattr(final_result.content, 'last_frame_url', None)
         
-        if image is not None:
-            first_frame_b64 = _image_to_base64(image)
-            first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
-            content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
-        
-        if last_frame_image is not None:
-            if model_choice == "doubao-seedance-1-0-pro-fast":
-                raise ValueError(f"Model '{model_choice}' does not support last_frame_image. Please disconnect the last_frame_image input.")
-            if image is None:
-                raise ValueError("A first frame image must be provided when using a last frame image.")
-            last_frame_b64 = _image_to_base64(last_frame_image)
-            last_frame_url = f"data:image/jpeg;base64,{last_frame_b64}"
-            content.append({"type": "image_url", "image_url": {"url": last_frame_url}, "role": "last_frame"})
+        seed_from_api = getattr(final_result, 'seed', random.randint(0, 4294967295))
 
+        filename_prefix = "Jimeng_VideoGen"
+        video_path = await _download_and_save_video_async_return_path(session, video_url, filename_prefix, seed_from_api, "Jimeng")
+        
+        if video_path is None:
+            raise RuntimeError("Failed to download or save video from API.")
+
+        last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
+        
+        usage_info = getattr(final_result, 'usage', None)
+        
+        output_response = {
+            "task_id": final_result.id,
+            "model": final_result.model,
+            "status": final_result.status,
+            "seed": seed_from_api,
+            "resolution": getattr(final_result, 'resolution', None),
+            "ratio": getattr(final_result, 'ratio', None),
+            "duration": getattr(final_result, 'duration', None),
+            "framespersecond": getattr(final_result, 'framespersecond', None),
+            "usage": usage_info.model_dump() if usage_info else None,
+            "created_at": datetime.datetime.fromtimestamp(final_result.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+            "updated_at": datetime.datetime.fromtimestamp(final_result.updated_at).strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
+
+    async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, non_blocking=False, image=None, last_frame_image=None, node_id=None):
         ark_client = client.ark
-
-        estimated_max_time = await _get_api_estimated_time_async(ark_client, final_model_name, estimation_duration, resolution)
+        cached_task = self.NON_BLOCKING_TASK_CACHE.get(node_id)
         
         async with aiohttp.ClientSession() as session:
-            try:
-                comfy.model_management.throw_exception_if_processing_interrupted()
+            if non_blocking and cached_task:
+                task_id = cached_task["task_id"]
+                print(f"[JimengAI] Checking status for non-blocking task: {task_id}")
                 
+                try:
+                    comfy.model_management.throw_exception_if_processing_interrupted()
+                    get_result = await asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=task_id)
+                    
+                    status = get_result.status
+                    
+                    if status == "succeeded":
+                        print(f"[JimengAI] Task {task_id} succeeded. Fetching results.")
+                        del self.NON_BLOCKING_TASK_CACHE[node_id]
+                        return await self._handle_task_success_async(get_result, session)
+                    
+                    elif status in ["failed", "cancelled"]:
+                        del self.NON_BLOCKING_TASK_CACHE[node_id]
+                        error = getattr(get_result, 'error', None)
+                        error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed with no error details."
+                        self._create_failure_json(error_msg, task_id)
+                        
+                    else:
+                        self._create_pending_json(status, task_id)
+
+                except Exception as e:
+                    if isinstance(e, comfy.model_management.InterruptProcessingException):
+                        raise e
+                    if isinstance(e, RuntimeError):
+                        raise e
+                    del self.NON_BLOCKING_TASK_CACHE[node_id]
+                    self._create_failure_json(f"API Error checking status for {task_id}: {e}", task_id)
+                
+                return
+
+            _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "camerafixed", "seed"])
+
+            final_model_name = ""
+            if model_choice == "doubao-seedance-1-0-pro":
+                final_model_name = "doubao-seedance-1-0-pro-250528"
+            elif model_choice == "doubao-seedance-1-0-pro-fast":
+                final_model_name = "doubao-seedance-1-0-pro-fast-251015"
+            elif model_choice == "doubao-seedance-1-0-lite":
+                if image is None:
+                    final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
+                else:
+                    final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
+            
+            actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
+            
+            (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+            
+            prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --camerafixed {'true' if camerafixed else 'false'} --seed {actual_seed}"
+            
+            content = [{"type": "text", "text": prompt_string}]
+            
+            if image is not None:
+                first_frame_b64 = _image_to_base64(image)
+                first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
+                content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
+            
+            if last_frame_image is not None:
+                if model_choice == "doubao-seedance-1-0-pro-fast":
+                    raise ValueError(f"Model '{model_choice}' does not support last_frame_image. Please disconnect the last_frame_image input.")
+                if image is None:
+                    raise ValueError("A first frame image must be provided when using a last frame image.")
+                last_frame_b64 = _image_to_base64(last_frame_image)
+                last_frame_url = f"data:image/jpeg;base64,{last_frame_b64}"
+                content.append({"type": "image_url", "image_url": {"url": last_frame_url}, "role": "last_frame"})
+
+            comfy.model_management.throw_exception_if_processing_interrupted()
+            
+            try:
                 create_result = await asyncio.to_thread(ark_client.content_generation.tasks.create, model=final_model_name, content=content, return_last_frame=True)
                 task_id = create_result.id
-
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
                 raise RuntimeError(f"Failed to create task: {e}")
-            
-            try:
-                final_result = await _poll_task_until_completion_async(
-                    ark_client, task_id, node_id, estimated_max_time, final_model_name, estimation_duration
-                )
-                
-                video_url = final_result.content.video_url
-                last_frame_url = getattr(final_result.content, 'last_frame_url', None)
-                
-                filename_prefix = "Jimeng_VideoGen"
-                video_path = await _download_and_save_video_async_return_path(session, video_url, filename_prefix, actual_seed, "Jimeng")
-                
-                if video_path is None:
-                    raise RuntimeError("Failed to download or save video from API.")
 
-                last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
-                
-                usage_info = getattr(final_result, 'usage', None)
-                
-                output_response = {
-                    "task_id": final_result.id,
-                    "status": final_result.status,
-                    "model": final_result.model,
-                    "created_at": final_result.created_at,
-                    "updated_at": final_result.updated_at,
-                    "video_url": getattr(final_result.content, 'video_url', None),
-                    "last_frame_url": getattr(final_result.content, 'last_frame_url', None),
-                    "usage": usage_info.model_dump() if usage_info else None
-                }
-                return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
-                
-            except (RuntimeError, TimeoutError) as e:
-                raise e
-            except comfy.model_management.InterruptProcessingException as e:
-                raise e
+            if non_blocking:
+                self.NON_BLOCKING_TASK_CACHE[node_id] = {"task_id": task_id}
+                print(f"[JimengAI] Non-Blocking task submitted. ID: {task_id}")
+                self._create_pending_json("submitted", task_id)
+            
+            else:
+                try:
+                    estimated_max_time = await _get_api_estimated_time_async(ark_client, final_model_name, estimation_duration, resolution)
+                    final_result = await _poll_task_until_completion_async(
+                        ark_client, task_id, node_id, estimated_max_time, final_model_name, estimation_duration
+                    )
+                    return await self._handle_task_success_async(final_result, session)
+                except (RuntimeError, TimeoutError) as e:
+                    raise e
+                except comfy.model_management.InterruptProcessingException as e:
+                    raise e
+
 
 class JimengReferenceImage2Video:
-    """根据参考图生成视频。"""
     ASPECT_RATIOS = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"]
+    NON_BLOCKING_TASK_CACHE = NON_BLOCKING_TASK_CACHE
+    
     @classmethod
     def INPUT_TYPES(s):
         return { "required": {
@@ -470,6 +530,7 @@ class JimengReferenceImage2Video:
             "resolution": (["480p", "720p"], {"default": "720p"}),
             "aspect_ratio": (s.ASPECT_RATIOS, {"default": "adaptive"}),
             "seed": ("INT", {"default": -1, "min": -1, "max": 4294967295}),
+            "non_blocking": ("BOOLEAN", {"default": False}),
         }, "optional": {
             "ref_image_1": ("IMAGE",),
             "ref_image_2": ("IMAGE",),
@@ -484,108 +545,235 @@ class JimengReferenceImage2Video:
     OUTPUT_NODE = False
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None, node_id=None):
-        _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "seed"])
-        
-        actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
-        model = "doubao-seedance-1-0-lite-i2v-250428"
-        
-        (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+    def _create_failure_json(self, error_message, task_id=None):
+        print(f"[JimengAI] Error: {error_message}")
+        raise RuntimeError(f"[JimengAI] Task {task_id or 'N/A'} failed: {error_message}")
 
-        prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --seed {actual_seed}"
+    def _create_pending_json(self, status, task_id):
+        print(f"[JimengAI] Info: Task {task_id} is {status}. Run again to check results.")
         
-        content = [{"type": "text", "text": prompt_string}]
-        ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
-        for img_tensor in ref_images:
-            if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
-        if len(content) == 1: raise ValueError("At least one reference image must be provided.")
+        status_message_map = {
+            "submitted": "Task submitted. Execution paused. Please run the workflow again to check status.",
+            "queued": "Task is queued (waiting). Execution paused. Please run the workflow again in a moment.",
+            "pending": "Task is pending (in queue). Execution paused. Please run the workflow again in a moment.",
+            "running": "Task is actively running. Execution paused. Please run the workflow again in a moment.",
+            "processing": "Task is actively processing. Execution paused. Please run the workflow again in a moment.",
+        }
         
+        specific_message = status_message_map.get(status, 
+            f"Task is in an intermediate state ({status}). Execution paused. Please run the workflow again in a moment."
+        )
+        
+        message = f"[JimengAI] Task {task_id}: {specific_message}"
+        raise RuntimeError(message)
+        
+    async def _handle_task_success_async(self, final_result, session):
+        video_url = final_result.content.video_url
+        last_frame_url = getattr(final_result.content, 'last_frame_url', None)
+
+        seed_from_api = getattr(final_result, 'seed', random.randint(0, 4294967295))
+
+        video_path = await _download_and_save_video_async_return_path(session, video_url, "Jimeng_Ref-I2V", seed_from_api, "Jimeng")
+
+        if video_path is None:
+            raise RuntimeError("Failed to download or save video from API.")
+
+        last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
+        
+        usage_info = getattr(final_result, 'usage', None)
+
+        output_response = {
+            "task_id": final_result.id,
+            "model": final_result.model,
+            "status": final_result.status,
+            "seed": seed_from_api,
+            "resolution": getattr(final_result, 'resolution', None),
+            "ratio": getattr(final_result, 'ratio', None),
+            "duration": getattr(final_result, 'duration', None),
+            "framespersecond": getattr(final_result, 'framespersecond', None),
+            "usage": usage_info.model_dump() if usage_info else None,
+            "created_at": datetime.datetime.fromtimestamp(final_result.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+            "updated_at": datetime.datetime.fromtimestamp(final_result.updated_at).strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
+
+    async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, non_blocking=False, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None, node_id=None):
         ark_client = client.ark
-
-        estimated_max_time = await _get_api_estimated_time_async(ark_client, model, estimation_duration, resolution) 
+        cached_task = self.NON_BLOCKING_TASK_CACHE.get(node_id)
         
         async with aiohttp.ClientSession() as session:
-            try:
-                comfy.model_management.throw_exception_if_processing_interrupted()
+            if non_blocking and cached_task:
+                task_id = cached_task["task_id"]
+                print(f"[JimengAI] Checking status for non-blocking task: {task_id}")
                 
+                try:
+                    comfy.model_management.throw_exception_if_processing_interrupted()
+                    get_result = await asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=task_id)
+                    
+                    status = get_result.status
+                    
+                    if status == "succeeded":
+                        print(f"[JimengAI] Task {task_id} succeeded. Fetching results.")
+                        del self.NON_BLOCKING_TASK_CACHE[node_id]
+                        return await self._handle_task_success_async(get_result, session)
+                    
+                    elif status in ["failed", "cancelled"]:
+                        del self.NON_BLOCKING_TASK_CACHE[node_id]
+                        error = getattr(get_result, 'error', None)
+                        error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed with no error details."
+                        self._create_failure_json(error_msg, task_id)
+                        
+                    else:
+                        self._create_pending_json(status, task_id)
+
+                except Exception as e:
+                    if isinstance(e, comfy.model_management.InterruptProcessingException):
+                        raise e
+                    if isinstance(e, RuntimeError):
+                        raise e
+                    del self.NON_BLOCKING_TASK_CACHE[node_id]
+                    self._create_failure_json(f"API Error checking status for {task_id}: {e}", task_id)
+
+                return
+
+            _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "seed"])
+            
+            actual_seed = random.randint(0, 4294967295) if seed == -1 else seed
+            model = "doubao-seedance-1-0-lite-i2v-250428"
+            
+            (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+
+            prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --seed {actual_seed}"
+            
+            content = [{"type": "text", "text": prompt_string}]
+            ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
+            for img_tensor in ref_images:
+                if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
+            if len(content) == 1: raise ValueError("At least one reference image must be provided.")
+            
+            comfy.model_management.throw_exception_if_processing_interrupted()
+            
+            try:
                 create_result = await asyncio.to_thread( ark_client.content_generation.tasks.create, model=model, content=content, return_last_frame=True )
                 task_id = create_result.id
-
             except Exception as e: 
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
                 raise RuntimeError(f"Failed to create task: {e}")
-            try:
-                final_result = await _poll_task_until_completion_async(
-                    ark_client, task_id, node_id, estimated_max_time, model, estimation_duration
-                )
-                
-                video_url = final_result.content.video_url
-                last_frame_url = getattr(final_result.content, 'last_frame_url', None)
 
-                video_path = await _download_and_save_video_async_return_path(session, video_url, "Jimeng_Ref-I2V", actual_seed, "Jimeng")
+            if non_blocking:
+                self.NON_BLOCKING_TASK_CACHE[node_id] = {"task_id": task_id}
+                print(f"[JimengAI] Non-Blocking task submitted. ID: {task_id}")
+                self._create_pending_json("submitted", task_id)
+            
+            else:
+                try:
+                    estimated_max_time = await _get_api_estimated_time_async(ark_client, model, estimation_duration, resolution) 
+                    final_result = await _poll_task_until_completion_async(
+                        ark_client, task_id, node_id, estimated_max_time, model, estimation_duration
+                    )
+                    return await self._handle_task_success_async(final_result, session)
+                except (RuntimeError, TimeoutError) as e:
+                    raise e
+                except comfy.model_management.InterruptProcessingException as e:
+                    raise e
 
-                if video_path is None:
-                    raise RuntimeError("Failed to download or save video from API.")
 
-                last_frame_tensor = await _download_url_to_image_tensor_async(session, last_frame_url)
-                
-                usage_info = getattr(final_result, 'usage', None)
+class JimengQueryTasks:
+    MODELS = [
+        "all", 
+        "doubao-seedance-1-0-pro-250528", 
+        "doubao-seedance-1-0-pro-fast-251015",
+        "doubao-seedance-1-0-lite-t2v-250428",
+        "doubao-seedance-1-0-lite-i2v-250428"
+    ]
+    STATUSES = ["all", "succeeded", "failed", "running", "queued", "cancelled"]
 
-                output_response = {
-                    "task_id": final_result.id,
-                    "status": final_result.status,
-                    "model": final_result.model,
-                    "created_at": final_result.created_at,
-                    "updated_at": final_result.updated_at,
-                    "video_url": getattr(final_result.content, 'video_url', None),
-                    "last_frame_url": getattr(final_result.content, 'last_frame_url', None),
-                    "usage": usage_info.model_dump() if usage_info else None
-                }
-                return (VideoFromFile(video_path), last_frame_tensor, json.dumps(output_response, indent=2))
-
-            except (RuntimeError, TimeoutError) as e:
-                raise e
-            except comfy.model_management.InterruptProcessingException as e:
-                raise e
-
-class JimengTaskStatusChecker:
-    """手动查询任务ID的状态和结果。"""
     @classmethod
     def INPUT_TYPES(s):
-        return { "required": { "client": ("JIMENG_CLIENT",), "task_id": ("STRING", {"forceInput": True}), } }
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("video_url", "last_frame_url", "status", "error_message", "model", "created_at", "updated_at")
-    FUNCTION = "check_status"
+        return {
+            "required": {
+                "client": ("JIMENG_CLIENT",),
+                "page_num": ("INT", {"default": 1, "min": 1, "max": 500}),
+                "page_size": ("INT", {"default": 10, "min": 1, "max": 500}),
+                "status": (s.STATUSES, {"default": "all"}),
+            },
+            "optional": {
+                "task_ids": ("STRING", {"default": "", "multiline": True}),
+                "model_choice": (s.MODELS, {"default": "all"}),
+                "custom_model_id": ("STRING", {"default": "", "multiline": False}),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING", "INT")
+    RETURN_NAMES = ("task_list_json", "total_tasks")
+    FUNCTION = "query_tasks"
     OUTPUT_NODE = True
     CATEGORY = GLOBAL_CATEGORY
     
-    async def check_status(self, client, task_id):
-        if not task_id: return ("", "", "no task_id provided", "Error: Task ID is empty.", "", "", "")
+    async def query_tasks(self, client, page_num, page_size, status, task_ids=None, model_choice="all", custom_model_id=None):
         ark_client = client.ark
+        
+        kwargs = {
+            "page_num": page_num,
+            "page_size": page_size
+        }
+
+        final_model = None
+        if custom_model_id and custom_model_id.strip():
+            final_model = custom_model_id.strip()
+            print(f"[JimengAI] Info: Using custom model ID: {final_model}")
+        elif model_choice != "all":
+            final_model = model_choice
+        
+        if final_model:
+            kwargs["model"] = final_model
+
+        if status != "all":
+            kwargs["status"] = status
+        
+        if task_ids and task_ids.strip():
+            id_list = [tid.strip() for tid in task_ids.split('\n') if tid.strip()]
+            if id_list:
+                kwargs["task_ids"] = id_list
+        
         try:
-            get_result = await asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=task_id)
-            status, model = get_result.status, get_result.model
-            created_at = datetime.datetime.fromtimestamp(get_result.created_at).strftime('%Y-%m-%d %H:%M:%S')
-            updated_at = datetime.datetime.fromtimestamp(get_result.updated_at).strftime('%Y-%m-%d %H:%M:%S')
-            video_url, last_frame_url, error_message = "", "", ""
-            if status == "succeeded":
-                video_url = get_result.content.video_url
-                last_frame_url = getattr(get_result.content, 'last_frame_url', "")
-            elif status == "failed" and get_result.error:
-                error_message = f"Code: {get_result.error.code}, Message: {get_result.error.message}"
-            return (video_url, last_frame_url, status, error_message, model, created_at, updated_at)
+            print(f"[JimengAI] Querying tasks with params: {kwargs}")
+            resp = await asyncio.to_thread(
+                ark_client.content_generation.tasks.list,
+                **kwargs
+            )
+            
+            items_list = [item.model_dump() for item in resp.items]
+            
+            # Convert timestamps to readable format
+            for item_dict in items_list:
+                if 'created_at' in item_dict and isinstance(item_dict['created_at'], (int, float)):
+                    item_dict['created_at'] = datetime.datetime.fromtimestamp(item_dict['created_at']).strftime('%Y-%m-%d %H:%M:%S')
+                if 'updated_at' in item_dict and isinstance(item_dict['updated_at'], (int, float)):
+                    item_dict['updated_at'] = datetime.datetime.fromtimestamp(item_dict['updated_at']).strftime('%Y-%m-%d %H:%M:%S')
+
+            items_json = json.dumps(items_list, indent=2, ensure_ascii=False)
+            total = resp.total
+            
+            print(f"[JimengAI] Query successful. Found {total} total tasks, returning {len(items_list)} items.")
+            return (items_json, total)
+            
         except Exception as e:
-            return ("", "", "api_error", f"API Error: {e}", "", "", "")
+            error_msg_str = f"Failed to query tasks: {e}"
+            print(f"[JimengAI] Error: {error_msg_str}")
+            error_msg = json.dumps({"error": error_msg_str}, indent=2, ensure_ascii=False)
+            return (error_msg, 0)
+
 
 NODE_CLASS_MAPPINGS = {
     "JimengVideoGeneration": JimengVideoGeneration,
     "JimengReferenceImage2Video": JimengReferenceImage2Video,
-    "JimengTaskStatusChecker": JimengTaskStatusChecker,
+    "JimengQueryTasks": JimengQueryTasks,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengVideoGeneration": "Jimeng Video Generation",
     "JimengReferenceImage2Video": "Jimeng Reference to Video",
-    "JimengTaskStatusChecker": "Jimeng Task Status Checker",
+    "JimengQueryTasks": "Jimeng Query Tasks",
 }

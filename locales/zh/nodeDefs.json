@@ -1,234 +1,313 @@
 {
-    "JimengAPIClient": {
-        "display_name": "即梦 API 客户端",
-        "inputs": {
-            "key_name": {
-                "name": "密钥名称"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "客户端"
-            }
-        }
+  "JimengAPIClient": {
+    "display_name": "即梦API客户端",
+    "description": "加载 `api_keys.json` 文件中指定的 API 密钥，并创建一个可供其他即梦 AI 节点使用的客户端实例。",
+    "inputs": {
+      "key_name": {
+        "name": "密钥名称",
+        "tooltip": "在 api_keys.json 中配置的自定义密钥名称"
+      }
     },
-    "JimengSeedream3": {
-        "display_name": "即梦 Seedream 3",
-        "inputs": {
-            "client": {
-                "name": "客户端"
-            },
-            "prompt": {
-                "name": "提示词"
-            },
-            "size": {
-                "name": "尺寸"
-            },
-            "seed": {
-                "name": "种子"
-            },
-            "guidance_scale": {
-                "name": "引导系数"
-            },
-            "watermark": {
-                "name": "水印"
-            },
-            "image": {
-                "name": "输入图像"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "图像"
-            },
-            "1": {
-                "name": "响应"
-            }
-        }
-    },
-    "JimengSeedream4": {
-        "display_name": "即梦 Seedream 4",
-        "inputs": {
-            "client": {
-                "name": "客户端"
-            },
-            "prompt": {
-                "name": "提示词"
-            },
-            "generation_mode": {
-                "name": "生成模式",
-                "options": {
-                    "Single Image (disabled)": "单图模式 (禁用组图)",
-                    "Image Group (auto)": "组图模式 (自动)"
-                }
-            },
-            "max_images": {
-                "name": "最大图片数"
-            },
-            "size": {
-                "name": "尺寸",
-                "options": {
-                    "Custom": "自定义",
-                    "2048x2048 (1:1)": "2048x2048 (1:1)",
-                    "2304x1728 (4:3)": "2304x1728 (4:3)",
-                    "1728x2304 (3:4)": "1728x2304 (3:4)",
-                    "2560x1440 (16:9)": "2560x1440 (16:9)",
-                    "1440x2560 (9:16)": "1440x2560 (9:16)",
-                    "2496x1664 (3:2)": "2496x1664 (3:2)",
-                    "1664x2496 (2:3)": "1664x2496 (2:3)",
-                    "3024x1296 (21:9)": "3024x1296 (21:9)",
-                    "4096x4096 (1:1)": "4096x4096 (1:1)"
-                }
-            },
-            "width": {
-                "name": "宽度"
-            },
-            "height": {
-                "name": "高度"
-            },
-            "seed": {
-                "name": "种子"
-            },
-            "watermark": {
-                "name": "水印"
-            },
-            "images": {
-                "name": "输入图像"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "图像"
-            },
-            "1": {
-                "name": "响应"
-            }
-        }
-    },
-    "JimengVideoGeneration": {
-        "display_name": "即梦视频生成",
-        "inputs": {
-            "client": {
-                "name": "客户端"
-            },
-            "model_choice": {
-                "name": "模型选择"
-            },
-            "prompt": {
-                "name": "提示词"
-            },
-            "duration": {
-                "name": "时长 (秒)"
-            },
-            "resolution": {
-                "name": "分辨率"
-            },
-            "aspect_ratio": {
-                "name": "宽高比"
-            },
-            "camerafixed": {
-                "name": "固定镜头"
-            },
-            "seed": {
-                "name": "种子"
-            },
-            "image": {
-                "name": "首帧图像"
-            },
-            "last_frame_image": {
-                "name": "尾帧图像"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "视频"
-            },
-            "1": {
-                "name": "最后一帧"
-            },
-            "2": {
-                "name": "响应"
-            }
-        }
-    },
-    "JimengReferenceImage2Video": {
-        "display_name": "即梦参考图转视频",
-        "inputs": {
-            "client": {
-                "name": "客户端"
-            },
-            "prompt": {
-                "name": "提示词"
-            },
-            "duration": {
-                "name": "时长 (秒)"
-            },
-            "resolution": {
-                "name": "分辨率"
-            },
-            "aspect_ratio": {
-                "name": "宽高比"
-            },
-            "seed": {
-                "name": "种子"
-            },
-            "ref_image_1": {
-                "name": "参考图 1"
-            },
-            "ref_image_2": {
-                "name": "参考图 2"
-            },
-            "ref_image_3": {
-                "name": "参考图 3"
-            },
-            "ref_image_4": {
-                "name": "参考图 4"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "视频"
-            },
-            "1": {
-                "name": "最后一帧"
-            },
-            "2": {
-                "name": "响应"
-            }
-        }
-    },
-    "JimengTaskStatusChecker": {
-        "display_name": "即梦任务状态检查器",
-        "inputs": {
-            "client": {
-                "name": "客户端"
-            },
-            "task_id": {
-                "name": "任务ID"
-            }
-        },
-        "outputs": {
-            "0": {
-                "name": "视频链接"
-            },
-            "1": {
-                "name": "尾帧链接"
-            },
-            "2": {
-                "name": "状态"
-            },
-            "3": {
-                "name": "错误信息"
-            },
-            "4": {
-                "name": "模型"
-            },
-            "5": {
-                "name": "创建时间"
-            },
-            "6": {
-                "name": "更新时间"
-            }
-        }
+    "outputs": {
+      "0": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端实例"
+      }
     }
+  },
+  "JimengSeedream3": {
+    "display_name": "即梦Seedream 3",
+    "description": "使用即梦 Seedream 3 模型进行文本到图像或图像到图像的生成。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于图像生成的文本提示词"
+      },
+      "size": {
+        "name": "尺寸",
+        "tooltip": "预设的图像尺寸。如果选择 'Custom'，将使用 '宽度' 和 '高度'。"
+      },
+      "width": {
+        "name": "宽度",
+        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）"
+      },
+      "height": {
+        "name": "高度",
+        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "随机种子，-1 表示随机"
+      },
+      "guidance_scale": {
+        "name": "引导系数",
+        "tooltip": "提示词的引导强度"
+      },
+      "watermark": {
+        "name": "水印",
+        "tooltip": "是否在生成的图像上添加水印"
+      },
+      "image": {
+        "name": "输入图像",
+        "tooltip": "用于图生图（Seededit 3）的可选输入图像"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "图像",
+        "tooltip": "生成的图像"
+      },
+      "1": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应"
+      }
+    }
+  },
+  "JimengSeedream4": {
+    "display_name": "即梦Seedream 4",
+    "description": "使用即梦 Seedream 4 模型生成图像，支持单图或组图（自动）模式。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于图像生成的文本提示词"
+      },
+      "generation_mode": {
+        "name": "生成模式",
+        "tooltip": "选择单图或图组生成",
+        "options": {
+          "Single Image (disabled)": "单图模式 (禁用组图)",
+          "Image Group (auto)": "组图模式 (自动)"
+        }
+      },
+      "max_images": {
+        "name": "最大图片数",
+        "tooltip": "在图组模式下生成的最大图像数量"
+      },
+      "size": {
+        "name": "尺寸",
+        "tooltip": "预设的图像尺寸。如果选择 'Custom'，将使用 '宽度' 和 '高度'。",
+        "options": {
+          "Custom": "自定义"
+        }
+      },
+      "width": {
+        "name": "宽度",
+        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）"
+      },
+      "height": {
+        "name": "高度",
+        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "随机种子，-1 表示随机"
+      },
+      "watermark": {
+        "name": "水印",
+        "tooltip": "是否在生成的图像上添加水印"
+      },
+      "images": {
+        "name": "输入图像",
+        "tooltip": "用于图生图的输入图像（最多10张）"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "图像",
+        "tooltip": "生成的图像（批处理）"
+      },
+      "1": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应"
+      }
+    }
+  },
+  "JimengVideoGeneration": {
+    "display_name": "即梦视频生成",
+    "description": "即梦 AI 视频生成节点。支持纯文本生成（T2V），或使用首帧/尾帧图像进行视频生成（I2V）。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端"
+      },
+      "model_choice": {
+        "name": "模型选择",
+        "tooltip": "选择要使用的视频生成模型"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于视频生成的文本提示词"
+      },
+      "duration": {
+        "name": "时长 (秒)",
+        "tooltip": "视频的期望时长（秒）"
+      },
+      "resolution": {
+        "name": "分辨率",
+        "tooltip": "视频的分辨率（480p, 720p, 1080p）"
+      },
+      "aspect_ratio": {
+        "name": "宽高比",
+        "tooltip": "视频的宽高比"
+      },
+      "camerafixed": {
+        "name": "固定镜头",
+        "tooltip": "是否固定镜头"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "随机种子，-1 表示随机"
+      },
+      "non_blocking": {
+        "name": "非阻塞模式",
+        "tooltip": "启用后，任务将提交到后台执行，工作流将暂停。再次运行时会检查任务状态。"
+      },
+      "image": {
+        "name": "首帧图像",
+        "tooltip": "用于图生视频的可选起始图像"
+      },
+      "last_frame_image": {
+        "name": "尾帧图像",
+        "tooltip": "用于图生视频的可选结束图像（需要首帧）"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "视频",
+        "tooltip": "生成的视频文件"
+      },
+      "1": {
+        "name": "最后一帧",
+        "tooltip": "生成的视频的最后一帧图像"
+      },
+      "2": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应"
+      }
+    }
+  },
+  "JimengReferenceImage2Video": {
+    "display_name": "即梦参考图转视频",
+    "description": "即梦 AI 参考图转视频节点。根据输入的提示词和一张或多张参考图像来生成视频。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于视频生成的文本提示词"
+      },
+      "duration": {
+        "name": "时长 (秒)",
+        "tooltip": "视频的期望时长（秒）"
+      },
+      "resolution": {
+        "name": "分辨率",
+        "tooltip": "视频的分辨率（480p, 720p）"
+      },
+      "aspect_ratio": {
+        "name": "宽高比",
+        "tooltip": "视频的宽高比"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "随机种子，-1 表示随机"
+      },
+      "non_blocking": {
+        "name": "非阻塞模式",
+        "tooltip": "启用后，任务将提交到后台执行，工作流将暂停。再次运行时会检查任务状态。"
+      },
+      "ref_image_1": {
+        "name": "参考图 1",
+        "tooltip": "参考图像 1（至少需要一张）"
+      },
+      "ref_image_2": {
+        "name": "参考图 2",
+        "tooltip": "可选的参考图像 2"
+      },
+      "ref_image_3": {
+        "name": "参考图 3",
+        "tooltip": "可选的参考图像 3"
+      },
+      "ref_image_4": {
+        "name": "参考图 4",
+        "tooltip": "可选的参考图像 4"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "视频",
+        "tooltip": "生成的视频文件"
+      },
+      "1": {
+        "name": "最后一帧",
+        "tooltip": "生成的视频的最后一帧图像"
+      },
+      "2": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应"
+      }
+    }
+  },
+  "JimengQueryTasks": {
+    "display_name": "即梦视频生成任务列表查询",
+    "description": "查询符合条件的即梦 API 视频生成任务列表",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "即梦 API 客户端"
+      },
+      "page_num": {
+        "name": "页码",
+        "tooltip": "查询的页码"
+      },
+      "page_size": {
+        "name": "每页数量",
+        "tooltip": "每页返回的任务数量"
+      },
+      "status": {
+        "name": "任务状态",
+        "tooltip": "要过滤的任务状态",
+        "options": {
+          "all": "全部状态",
+          "succeeded": "成功",
+          "failed": "失败",
+          "running": "运行中",
+          "queued": "排队中",
+          "cancelled": "已取消"
+        }
+      },
+      "task_ids": {
+        "name": "任务ID列表",
+        "tooltip": "要查询的特定任务ID（每行一个）"
+      },
+      "model_choice": {
+        "name": "模型选择",
+        "tooltip": "按特定模型过滤"
+      },
+      "custom_model_id": {
+        "name": "自定义推理接入点ID",
+        "tooltip": "按自定义模型ID过滤（优先于模型选择）"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "查询结果",
+        "tooltip": "查询到的任务列表（JSON 字符串）"
+      },
+      "1": {
+        "name": "任务数量",
+        "tooltip": "符合条件的总任务数量"
+      }
+    }
+  }
 }
