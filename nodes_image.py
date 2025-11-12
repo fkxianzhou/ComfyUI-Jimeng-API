@@ -12,11 +12,12 @@ from .nodes_shared import (
 )
 
 class JimengSeedream3:
-    """Seedream 3 & Seededit 3 图像生成。"""
+    # 即梦 Seedream 3 文生图 & 图生图节点
     RECOMMENDED_SIZES = ["Custom", "1024x1024 (1:1)", "864x1152 (3:4)", "1152x864 (4:3)", "1280x720 (16:9)", "720x1280 (9:16)", "832x1248 (2:3)", "1248x832 (3:2)", "1512x648 (21:9)"]
     
     @classmethod
     def INPUT_TYPES(s):
+        # 定义节点的输入参数
         return {
             "required": {
                 "client": ("JIMENG_CLIENT",),
@@ -38,6 +39,7 @@ class JimengSeedream3:
     CATEGORY = GLOBAL_CATEGORY
 
     async def generate(self, client, prompt, size, width, height, seed, guidance_scale, watermark, image=None):
+        # 节点的主要异步执行函数
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         openai_client = client.openai
 
@@ -48,6 +50,7 @@ class JimengSeedream3:
             "watermark": watermark
         }
         
+        # 处理自定义分辨率或预设分辨率
         if size == "Custom":
             total_pixels = width * height
             min_pixels = 512 * 512  
@@ -63,6 +66,7 @@ class JimengSeedream3:
         else:
             size_param = size.split(" ")[0]
 
+        # 根据是否提供输入图像来决定使用 T2I 还是 I2I 模型
         if image is None:
             model_id = "doubao-seedream-3-0-t2i-250415"
         else:
@@ -73,8 +77,10 @@ class JimengSeedream3:
 
         async with aiohttp.ClientSession() as session:
             try:
+                # 检查中断
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 
+                # 调用 API 生成图像
                 resp = await openai_client.images.generate(
                     model=model_id,
                     prompt=prompt,
@@ -83,12 +89,15 @@ class JimengSeedream3:
                     extra_body=extra_body
                 )
                 
+                # 检查中断
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 
+                # 异步下载图像 URL 到 Tensor
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
                 if image_tensor is None:
                     raise RuntimeError("Failed to download the generated image.")
                 
+                # 格式化输出响应
                 output_response = {
                     "model": resp.model,
                     "created": resp.created,
@@ -102,10 +111,11 @@ class JimengSeedream3:
                 raise RuntimeError(f"Failed to generate image with model {model_id}: {e}")
 
 class JimengSeedream4:
-    """Seedream4 文生图与图生图。"""
+    # 即梦 Seedream 4 文生图 & 图生图节点
     RECOMMENDED_SIZES = [ "Custom", "2048x2048 (1:1)", "2304x1728 (4:3)", "1728x2304 (3:4)", "2560x1440 (16:9)", "1440x2560 (9:16)", "2496x1664 (3:2)", "1664x2496 (2:3)", "3024x1296 (21:9)", "4096x4096 (1:1)" ]
     @classmethod
     def INPUT_TYPES(s):
+        # 定义节点的输入参数
         return {
             "required": {
                 "client": ("JIMENG_CLIENT",),
@@ -128,6 +138,7 @@ class JimengSeedream4:
     CATEGORY = GLOBAL_CATEGORY
 
     async def generate(self, client, prompt, generation_mode, max_images, size, width, height, seed, watermark, images=None):
+        # 节点的主要异步执行函数
         sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
         n_input_images = 0
         if images is not None: n_input_images = images.shape[0]
@@ -137,6 +148,7 @@ class JimengSeedream4:
 
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         
+        # 处理分辨率
         if size == "Custom":
             total_pixels = width * height
             min_pixels = 1280 * 720
@@ -152,12 +164,14 @@ class JimengSeedream4:
         else:
             size_str = size.split(" ")[0]
         
+        # 处理输入的图像（可能为多个）
         image_param = None
         if images is not None:
             image_b64_list = [_image_to_base64(images[i:i+1]) for i in range(n_input_images)]
             if n_input_images == 1: image_param = f"data:image/jpeg;base64,{image_b64_list[0]}"
             else: image_param = [f"data:image/jpeg;base64,{b64}" for b64 in image_b64_list]
 
+        # 准备 API 请求体
         extra_body = {"seed": actual_seed, "watermark": watermark, "sequential_image_generation": sequential_image_generation}
         if image_param: extra_body["image"] = image_param
         if sequential_image_generation == "auto":
@@ -166,17 +180,22 @@ class JimengSeedream4:
         openai_client = client.openai
         async with aiohttp.ClientSession() as session:
             try:
+                # 检查中断
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 
+                # 调用 API
                 resp = await openai_client.images.generate(model="doubao-seedream-4-0-250828", prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
                 
+                # 检查中断
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 
+                # 并行下载所有生成的图像
                 download_tasks = [_download_url_to_image_tensor_async(session, item.url) for item in resp.data]
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
                 if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
                 
+                # 格式化输出响应
                 image_data_list = []
                 for item in resp.data:
                     image_data_list.append({
@@ -189,17 +208,20 @@ class JimengSeedream4:
                     "created": resp.created,
                     "images": image_data_list
                 }
+                # 将所有下载的图像 Tensor 合并为一个 Batch
                 return (torch.cat(valid_tensors, dim=0), json.dumps(output_response, indent=2))
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
                 raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
 
+# 节点类映射，用于 ComfyUI 注册
 NODE_CLASS_MAPPINGS = {
     "JimengSeedream3": JimengSeedream3,
     "JimengSeedream4": JimengSeedream4,
 }
 
+# 节点显示名称映射，用于 ComfyUI 菜单
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengSeedream3": "Jimeng Seedream 3",
     "JimengSeedream4": "Jimeng Seedream 4",
