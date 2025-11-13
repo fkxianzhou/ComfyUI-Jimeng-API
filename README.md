@@ -19,8 +19,6 @@
     pip install -r requirements.txt
     ```
 
-    (依赖文件 包含 `volcenginesdkarkruntime` 和 `aiohttp`)
-
 3.  **重启 ComfyUI**。
 
 ## ⚙️ 设置：配置 API 密钥

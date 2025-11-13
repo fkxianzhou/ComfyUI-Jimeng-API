@@ -314,10 +314,6 @@ class JimengVideoBase:
 
     async def _handle_batch_success_async(self, successful_tasks: list, output_save_path: str, generation_count: int, save_last_frame_batch: bool, session: aiohttp.ClientSession):
         # 处理所有成功的任务：下载到Temp，（可选）复制到Output，并返回第一个结果
-        
-        if not successful_tasks:
-            print("[JimengAI] Warning: No tasks succeeded in the batch.")
-            return (None, None, "[]")
 
         print(f"[JimengAI] Info: Handling {len(successful_tasks)} successful tasks. Sorting by seed...")
         
@@ -488,6 +484,18 @@ class JimengVideoBase:
                         # 所有任务都已完成（成功或失败）
                         print(f"[JimengAI] Non-blocking batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
                         del self.NON_BLOCKING_TASK_CACHE[node_id]
+                        
+                        # 异常处理 (非阻塞)
+                        if not successful_tasks:
+                            if failed_tasks_info:
+                                first_task_id, first_error_msg = failed_tasks_info[0]
+                                error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
+                                if generation_count > 1:
+                                    error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
+                                self._create_failure_json(error_to_raise, first_task_id)
+                            else:
+                                self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+
                         return await self._handle_batch_success_async(successful_tasks, batch_save_path, generation_count, save_last_frame_batch, session)
 
                 except Exception as e:
@@ -630,6 +638,24 @@ class JimengVideoBase:
 
             print(f"[JimengAI] Batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
             
+            # 异常处理 (阻塞)
+            # 检查是否有任何任务成功
+            if not successful_tasks:
+                # 如果没有任何任务成功（无论是单个任务还是批处理中的所有任务）
+                if failed_tasks_info:
+                    # 如果有失败信息，报告第一个具体的失败原因
+                    first_task_id, first_error_msg = failed_tasks_info[0]
+                    error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
+                    if generation_count > 1:
+                        error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
+                    
+                    # 使用 self._create_failure_json 抛出异常, 中断工作流
+                    self._create_failure_json(error_to_raise, first_task_id)
+                else:
+                    # 如果没有成功也没有失败信息
+                    self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+
+            # 只有在至少有一个任务成功时，才继续处理并返回结果
             return await self._handle_batch_success_async(successful_tasks, batch_save_path, generation_count, save_last_frame_batch, session)
 
 
