@@ -175,9 +175,4 @@
 
 ## workflows 示例工作流
 
-您可以在 `example_workflows` 目录中找到所有节点的示例工作流（.json 文件）和效果图（.jpg 文件）：
-
-- `Jimeng Seedream 3.json` / `.jpg`
-- `Jimeng Seedream 4.json` / `.jpg`
-- `Jimeng Video Generation.json` / `.jpg`
-- `Jimeng Reference to Video.json` / `.jpg`
+您可以在 `example_workflows` 目录中找到所有节点的示例工作流。

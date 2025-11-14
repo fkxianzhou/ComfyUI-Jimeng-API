@@ -44,21 +44,19 @@ def load_api_keys():
     except Exception as e:
         print(f"[JimengAI] Error: Failed to load 'api_keys.json': {e}")
 
-load_api_keys()
-
 async def _fetch_data_from_url_async(session: aiohttp.ClientSession, url: str) -> bytes:
-    """【异步】从给定的URL下载数据。"""
+    # 从给定的URL下载数据
     async with session.get(url) as response:
         response.raise_for_status()
         return await response.read()
 
 def _tensor2images(tensor: torch.Tensor) -> list:
-    """将输入的PyTorch Tensor转换为PIL Image对象列表。"""
+    # 将输入的PyTorch Tensor转换为PIL Image对象列表
     np_imgs = numpy.clip(tensor.cpu().numpy() * 255.0, 0, 255.0).astype(numpy.uint8)
     return [PIL.Image.fromarray(np_img) for np_img in np_imgs]
 
 def _image_to_base64(image: torch.Tensor) -> str:
-    """将单个图像Tensor转换为Base64编码的字符串。"""
+    # 将单个图像Tensor转换为Base64编码的字符串
     if image is None: return None
     with io.BytesIO() as bytes_io:
         _tensor2images(image)[0].save(bytes_io, format='JPEG')
@@ -66,7 +64,7 @@ def _image_to_base64(image: torch.Tensor) -> str:
     return base64.b64encode(data_bytes).decode("utf-8")
 
 async def _download_url_to_image_tensor_async(session: aiohttp.ClientSession, url: str) -> torch.Tensor | None:
-    """【异步】从URL下载图片并将其转换为ComfyUI的IMAGE Tensor格式。"""
+    # 从URL下载图片并将其转换为ComfyUI的IMAGE Tensor格式
     if not url: return None
     try:
         image_data = await _fetch_data_from_url_async(session, url)
@@ -79,15 +77,17 @@ async def _download_url_to_image_tensor_async(session: aiohttp.ClientSession, ur
         return None
 
 class JimengClients:
-    """持有OpenAI和Ark两种API客户端的容器。"""
+    # 持有OpenAI和Ark两种API客户端的容器
     def __init__(self, openai_client, ark_client):
         self.openai = openai_client
         self.ark = ark_client
 
 class JimengAPIClient:
-    """加载API密钥并创建统一的客户端。"""
+    # 加载API密钥并创建统一的客户端
     @classmethod
     def INPUT_TYPES(s):
+        load_api_keys()
+        
         key_names = [key["customName"] for key in API_KEYS_CONFIG]
         if not key_names:
             key_names = ["No Keys Found in api_keys.json"]

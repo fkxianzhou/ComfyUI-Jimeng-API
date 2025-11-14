@@ -215,13 +215,13 @@ class JimengSeedream4:
                     raise e
                 raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
 
-# 节点类映射，用于 ComfyUI 注册
+# 节点类映射
 NODE_CLASS_MAPPINGS = {
     "JimengSeedream3": JimengSeedream3,
     "JimengSeedream4": JimengSeedream4,
 }
 
-# 节点显示名称映射，用于 ComfyUI 菜单
+# 节点显示名称映射
 NODE_DISPLAY_NAME_MAPPINGS = {
     "JimengSeedream3": "Jimeng Seedream 3",
     "JimengSeedream4": "Jimeng Seedream 4",

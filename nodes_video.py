@@ -173,73 +173,65 @@ async def _get_api_estimated_time_async(ark_client, model_name: str, duration: i
         print(f"[JimengAI] Warning: Failed to fetch or analyze task history: {e}. Using fallback estimate.")
         return fallback_time
 
-async def _download_and_save_video_async_return_path(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> str | None:
-    # 下载视频到 TEMP 目录并返回 绝对 路径
-    if not video_url: return None
-    if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
-
-    # 始终下载到 TEMP 目录
-    output_dir = folder_paths.get_temp_directory()
+async def _download_to_temp_async(session: aiohttp.ClientSession, url: str, filename_prefix: str, seed: int | None, save_path: str, file_ext: str) -> (str | None, bytes | None):
+    # 下载到 TEMP 目录并返回绝对路径和数据
+    if not url: 
+        return (None, None)
     
+    if seed is not None: 
+        filename_prefix = f"{filename_prefix}_seed_{seed}"
+
+    output_dir = folder_paths.get_temp_directory()
     if save_path:
-        # save_path (e.g., "Jimeng") 是 temp 目录下的子目录
         output_dir = os.path.join(output_dir, save_path)
         
-    (full_output_folder, filename, _, subfolder, _) = folder_paths.get_save_image_path(filename_prefix, output_dir)
-    
+    (full_output_folder, filename, _, _, _) = folder_paths.get_save_image_path(filename_prefix, output_dir)
     os.makedirs(full_output_folder, exist_ok=True)
-    
-    file_ext = video_url.split('.')[-1].split('?')[0]
-    if not file_ext: file_ext = "mp4"
     
     final_filename = f"{filename}_{random.randint(1, 10000)}.{file_ext}"
     final_path = os.path.join(full_output_folder, final_filename)
     
     try:
-        data = await _fetch_data_from_url_async(session, video_url)
-        with open(final_path, "wb") as f: f.write(data)
-        # 返回 VideoFromFile 需要的 绝对路径
-        return final_path
+        data = await _fetch_data_from_url_async(session, url)
+        with open(final_path, "wb") as f: 
+            f.write(data)
+        return (final_path, data)
     except Exception as e:
-        print(f"[JimengAI] Error: Failed to download or save video to temp path: {final_path}. Error: {e}")
+        print(f"[JimengAI] Error: Failed to download or save to temp path: {final_path}. Error: {e}")
+        return (None, None)
+
+async def _download_and_save_video_async_return_path(session: aiohttp.ClientSession, video_url: str, filename_prefix: str, seed: int | None, save_path: str) -> str | None:
+    # 下载视频到 TEMP 目录并返回绝对路径
+    if not video_url: 
         return None
+    
+    file_ext = video_url.split('.')[-1].split('?')[0] or "mp4"
+    (final_path, _) = await _download_to_temp_async(session, video_url, filename_prefix, seed, save_path, file_ext)
+    
+    return final_path
 
 async def _download_and_save_frame_async_return_tensor_and_path(session: aiohttp.ClientSession, frame_url: str, filename_prefix: str, seed: int | None, save_path: str) -> (torch.Tensor | None, str | None):
-    # 下载帧到 TEMP 目录并返回 Tensor 和 绝对 路径
-    if not frame_url: return (None, None)
-    if seed is not None: filename_prefix = f"{filename_prefix}_seed_{seed}"
+    # 下载帧到 TEMP 目录并返回 Tensor 和绝对路径
+    if not frame_url: 
+        return (None, None)
+        
+    file_ext = frame_url.split('.')[-1].split('?')[0] or "jpg"
+    (final_path, data) = await _download_to_temp_async(session, frame_url, filename_prefix, seed, save_path, file_ext)
 
-    # 始终下载到 TEMP 目录
-    output_dir = folder_paths.get_temp_directory()
-    
-    if save_path:
-        # save_path (e.g., "Jimeng") 是 temp 目录下的子目录
-        output_dir = os.path.join(output_dir, save_path)
+    if final_path is None or data is None:
+        return (None, None)
         
-    (full_output_folder, filename, _, subfolder, _) = folder_paths.get_save_image_path(filename_prefix, output_dir)
-    os.makedirs(full_output_folder, exist_ok=True)
-    
-    file_ext = frame_url.split('.')[-1].split('?')[0]
-    if not file_ext: file_ext = "jpg"
-    
-    final_filename = f"{filename}_{random.randint(1, 10000)}.{file_ext}"
-    final_path = os.path.join(full_output_folder, final_filename)
-    
     try:
-        data = await _fetch_data_from_url_async(session, frame_url)
-        # 保存文件
-        with open(final_path, "wb") as f: f.write(data)
-        
         # 转换为 Tensor
         i = PIL.Image.open(io.BytesIO(data))
         image = i.convert("RGB")
         image = numpy.array(image).astype(numpy.float32) / 255.0
         
-        # 返回 Tensor 和 绝对路径
         return (torch.from_numpy(image)[None,], final_path)
     except Exception as e:
-        print(f"[JimengAI] Error: Failed to download or save frame to temp path: {final_path}. Error: {e}")
-        return (None, None)
+        print(f"[JimengAI] Error: Failed to convert downloaded frame to tensor: {e}")
+        # 即使转换失败，也可能返回路径，但Tensor为None
+        return (None, final_path)
 
 
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
@@ -446,217 +438,282 @@ class JimengVideoBase:
         ark_client = client.ark
         ps_instance = PromptServer.instance
         cached_data = self.NON_BLOCKING_TASK_CACHE.get(node_id)
-        
-        async with aiohttp.ClientSession() as session:
             
-            # 1. 非阻塞模式 - 状态检查
-            if non_blocking and cached_data:
-                task_ids = cached_data["task_ids"]
-                print(f"[JimengAI] Checking status for non-blocking batch of {len(task_ids)} tasks...")
+        # 1. 非阻塞模式 - 状态检查
+        if non_blocking and cached_data:
+            task_ids = cached_data["task_ids"]
+            print(f"[JimengAI] Checking status for non-blocking batch of {len(task_ids)} tasks...")
+            
+            try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                get_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=tid) for tid in task_ids]
+                results = await asyncio.gather(*get_coroutines, return_exceptions=True)
                 
-                try:
-                    comfy.model_management.throw_exception_if_processing_interrupted()
-                    get_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=tid) for tid in task_ids]
-                    results = await asyncio.gather(*get_coroutines, return_exceptions=True)
-                    
-                    successful_tasks, failed_tasks_info, pending_tasks = [], [], []
+                successful_tasks, failed_tasks_info, pending_tasks = [], [], []
 
-                    for i, res in enumerate(results):
-                        if isinstance(res, Exception):
-                            failed_tasks_info.append((task_ids[i], f"API Error checking status: {res}"))
-                        elif res.status == "succeeded":
-                            successful_tasks.append(res)
-                        elif res.status in ["failed", "cancelled"]:
-                            error = getattr(res, 'error', None)
-                            error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed/Cancelled with no error details."
-                            failed_tasks_info.append((res.id, error_msg))
-                        else:
-                            pending_tasks.append(res)
-
-                    # 记录所有失败
-                    for tid, error_msg in failed_tasks_info:
-                        self._log_batch_task_failure(error_msg, tid)
-                    
-                    if pending_tasks:
-                        # 仍有任务在运行，再次挂起
-                        self._create_pending_json(pending_tasks[0].status, pending_tasks[0].id, len(pending_tasks))
+                for i, res in enumerate(results):
+                    if isinstance(res, Exception):
+                        failed_tasks_info.append((task_ids[i], f"API Error checking status: {res}"))
+                    elif res.status == "succeeded":
+                        successful_tasks.append(res)
+                    elif res.status in ["failed", "cancelled"]:
+                        error = getattr(res, 'error', None)
+                        error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed/Cancelled with no error details."
+                        failed_tasks_info.append((res.id, error_msg))
                     else:
-                        # 所有任务都已完成（成功或失败）
-                        print(f"[JimengAI] Non-blocking batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
-                        del self.NON_BLOCKING_TASK_CACHE[node_id]
-                        
-                        # 异常处理 (非阻塞)
-                        if not successful_tasks:
-                            if failed_tasks_info:
-                                first_task_id, first_error_msg = failed_tasks_info[0]
-                                error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
-                                if generation_count > 1:
-                                    error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
-                                self._create_failure_json(error_to_raise, first_task_id)
-                            else:
-                                self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+                        pending_tasks.append(res)
 
+                # 记录所有失败
+                for tid, error_msg in failed_tasks_info:
+                    self._log_batch_task_failure(error_msg, tid)
+                
+                if pending_tasks:
+                    # 仍有任务在运行，再次挂起
+                    self._create_pending_json(pending_tasks[0].status, pending_tasks[0].id, len(pending_tasks))
+                else:
+                    # 所有任务都已完成（成功或失败）
+                    print(f"[JimengAI] Non-blocking batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
+                    del self.NON_BLOCKING_TASK_CACHE[node_id]
+                    
+                    # 异常处理 (非阻塞)
+                    if not successful_tasks:
+                        if failed_tasks_info:
+                            first_task_id, first_error_msg = failed_tasks_info[0]
+                            error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
+                            if generation_count > 1:
+                                error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
+                            self._create_failure_json(error_to_raise, first_task_id)
+                        else:
+                            self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+                    
+                    # 在此处创建会话，仅用于本次下载
+                    async with aiohttp.ClientSession() as session:
                         return await self._handle_batch_success_async(successful_tasks, batch_save_path, generation_count, save_last_frame_batch, session)
 
-                except Exception as e:
-                    if isinstance(e, comfy.model_management.InterruptProcessingException): raise e
-                    if isinstance(e, RuntimeError): raise e
-                    del self.NON_BLOCKING_TASK_CACHE[node_id]
-                    self._create_failure_json(f"API Error checking batch status: {e}")
-            
-            # 2. 新任务提交
-            print(f"[JimengAI] Submitting batch of {generation_count} tasks to API (Model: {model_name})...")
-            create_coroutines = []
-            for _ in range(generation_count):
-                create_coroutines.append(
-                    asyncio.to_thread(ark_client.content_generation.tasks.create, model=model_name, content=content, return_last_frame=True)
-                )
-            
-            comfy.model_management.throw_exception_if_processing_interrupted()
-            results = await asyncio.gather(*create_coroutines, return_exceptions=True)
+            except Exception as e:
+                if isinstance(e, comfy.model_management.InterruptProcessingException): raise e
+                if isinstance(e, RuntimeError): raise e
+                del self.NON_BLOCKING_TASK_CACHE[node_id]
+                self._create_failure_json(f"API Error checking batch status: {e}")
+        
+        # 2. 新任务提交
+        print(f"[JimengAI] Submitting batch of {generation_count} tasks to API (Model: {model_name})...")
+        create_coroutines = []
+        for _ in range(generation_count):
+            create_coroutines.append(
+                asyncio.to_thread(ark_client.content_generation.tasks.create, model=model_name, content=content, return_last_frame=True)
+            )
+        
+        comfy.model_management.throw_exception_if_processing_interrupted()
+        results = await asyncio.gather(*create_coroutines, return_exceptions=True)
 
-            tasks_to_poll = []
-            creation_failed_count = 0
-            for res in results:
-                if isinstance(res, Exception):
-                    self._log_batch_task_failure(f"Task creation failed: {res}")
-                    creation_failed_count += 1
-                else:
-                    tasks_to_poll.append(res)
+        tasks_to_poll = []
+        creation_failed_count = 0
+        for res in results:
+            if isinstance(res, Exception):
+                self._log_batch_task_failure(f"Task creation failed: {res}")
+                creation_failed_count += 1
+            else:
+                tasks_to_poll.append(res)
 
-            if not tasks_to_poll:
-                self._create_failure_json("All tasks in batch failed on creation.")
-            
-            print(f"[JimengAI] Batch submitted. {len(tasks_to_poll)} tasks created, {creation_failed_count} failed.")
+        if not tasks_to_poll:
+            self._create_failure_json("All tasks in batch failed on creation.")
+        
+        print(f"[JimengAI] Batch submitted. {len(tasks_to_poll)} tasks created, {creation_failed_count} failed.")
 
-            # 3. 非阻塞模式 - 缓存并挂起
-            if non_blocking:
-                task_ids = [t.id for t in tasks_to_poll]
-                self.NON_BLOCKING_TASK_CACHE[node_id] = {"task_ids": task_ids}
-                print(f"[JimengAI] Non-Blocking batch submitted. IDs: {task_ids}")
-                self._create_pending_json("submitted", task_ids[0], len(task_ids))
-            
-            # 4. 阻塞模式 - 并发轮询
-            estimated_max_time = await _get_api_estimated_time_async(ark_client, model_name, estimation_duration, resolution)
-            if estimated_max_time <= 0: estimated_max_time = 1
-            
-            start_time = time.time()
-            current_max = estimated_max_time
-            info_printed = False 
-            
-            successful_tasks = []
-            failed_tasks_info = []
-            tasks_to_poll_ids = [t.id for t in tasks_to_poll]
-            total_tasks = len(tasks_to_poll_ids)
-            
-            if generation_count > 1:
-                print(f"[JimengAI] Info: Polling {total_tasks} tasks. Base estimated time per task: {estimated_max_time}s")
+        # 3. 非阻塞模式 - 缓存并挂起
+        if non_blocking:
+            task_ids = [t.id for t in tasks_to_poll]
+            self.NON_BLOCKING_TASK_CACHE[node_id] = {"task_ids": task_ids}
+            print(f"[JimengAI] Non-Blocking batch submitted. IDs: {task_ids}")
+            self._create_pending_json("submitted", task_ids[0], len(task_ids))
+        
+        # 4. 阻塞模式 - 并发轮询
+        estimated_max_time = await _get_api_estimated_time_async(ark_client, model_name, estimation_duration, resolution)
+        if estimated_max_time <= 0: estimated_max_time = 1
+        
+        start_time = time.time()
+        current_max = estimated_max_time
+        info_printed = False 
+        
+        successful_tasks = []
+        failed_tasks_info = []
+        tasks_to_poll_ids = [t.id for t in tasks_to_poll]
+        total_tasks = len(tasks_to_poll_ids)
+        
+        if generation_count > 1:
+            print(f"[JimengAI] Info: Polling {total_tasks} tasks. Base estimated time per task: {estimated_max_time}s")
 
-            try:
-                while tasks_to_poll_ids:
-                    comfy.model_management.throw_exception_if_processing_interrupted()
+        try:
+            while tasks_to_poll_ids:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                
+                get_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=tid) for tid in tasks_to_poll_ids]
+                results = await asyncio.gather(*get_coroutines, return_exceptions=True)
+                
+                if generation_count == 1 and not info_printed:
+                    for res in results: 
+                        if not isinstance(res, Exception):
+                            try:
+                                get_result = res
+                                task_id = get_result.id
+                                task_created_at_str = "N/A"
+                                if hasattr(get_result, 'created_at') and get_result.created_at:
+                                    task_created_at_str = datetime.datetime.fromtimestamp(get_result.created_at).strftime('%Y-%m-%d %H:%M:%S')
+                                
+                                print(f"\n[JimengAI] Task submitted to API. Polling started.")
+                                print(f"    - TASK ID:    {task_id}")
+                                print(f"    - Created at: {task_created_at_str}")
+                                print(f"    - Model:      {model_name}")
+                                print(f"    - Duration:   ~{estimation_duration}s") 
+                                print(f"    - Est. Time:  {estimated_max_time}s")
+                                info_printed = True
+                                break 
+                            except Exception as e:
+                                print(f"\n[JimengAI] Warning: Could not print task info: {e}")
+                                info_printed = True 
+                
+                next_poll_ids = []
+                
+                for i, res in enumerate(results):
+                    current_task_id = tasks_to_poll_ids[i]
                     
-                    get_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.get, task_id=tid) for tid in tasks_to_poll_ids]
-                    results = await asyncio.gather(*get_coroutines, return_exceptions=True)
-                    
-                    if generation_count == 1 and not info_printed:
-                        for res in results: 
-                            if not isinstance(res, Exception):
-                                try:
-                                    get_result = res
-                                    task_id = get_result.id
-                                    task_created_at_str = "N/A"
-                                    if hasattr(get_result, 'created_at') and get_result.created_at:
-                                        task_created_at_str = datetime.datetime.fromtimestamp(get_result.created_at).strftime('%Y-%m-%d %H:%M:%S')
-                                    
-                                    print(f"\n[JimengAI] Task submitted to API. Polling started.")
-                                    print(f"    - TASK ID:    {task_id}")
-                                    print(f"    - Created at: {task_created_at_str}")
-                                    print(f"    - Model:      {model_name}")
-                                    print(f"    - Duration:   ~{estimation_duration}s") 
-                                    print(f"    - Est. Time:  {estimated_max_time}s")
-                                    info_printed = True
-                                    break 
-                                except Exception as e:
-                                    print(f"\n[JimengAI] Warning: Could not print task info: {e}")
-                                    info_printed = True 
-                    
-                    next_poll_ids = []
-                    
-                    for i, res in enumerate(results):
-                        current_task_id = tasks_to_poll_ids[i]
-                        
-                        if isinstance(res, Exception):
-                            print(f"\n[JimengAI] Warning: Failed to get status for task {current_task_id}, retrying... Error: {res}")
-                            next_poll_ids.append(current_task_id) 
-                        elif res.status == "succeeded":
-                            successful_tasks.append(res)
-                        elif res.status in ["failed", "cancelled"]:
-                            error = getattr(res, 'error', None)
-                            error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed/Cancelled"
-                            failed_tasks_info.append((current_task_id, error_msg)) 
-                        else:
-                            next_poll_ids.append(current_task_id) 
-                    
-                    tasks_to_poll_ids = next_poll_ids
-                    elapsed = time.time() - start_time
-                    
-                    value_to_send = min(int(elapsed), current_max - 1)
-                    if elapsed > current_max:
-                         current_max = int(elapsed) + 1 
-
-                    if node_id and ps_instance:
-                        ps_instance.send_sync("progress", {"value": value_to_send, "max": current_max, "node": node_id})
-
-                    if tasks_to_poll_ids:
-                        if generation_count == 1:
-                            if info_printed: 
-                                print(f"[JimengAI] Polling Task {tasks_to_poll_ids[0]}: {int(elapsed)}s / {current_max}s elapsed...", end="\r")
-                        else:
-                            completed_tasks = len(successful_tasks) + len(failed_tasks_info)
-                            print(f"[JimengAI] Polling Batch: {completed_tasks}/{total_tasks} done. {len(tasks_to_poll_ids)} pending... ({int(elapsed)}s / {current_max}s Est.)", end="\r")
-
-                        await asyncio.sleep(poll_interval)
+                    if isinstance(res, Exception):
+                        print(f"\n[JimengAI] Warning: Failed to get status for task {current_task_id}, retrying... Error: {res}")
+                        next_poll_ids.append(current_task_id) 
+                    elif res.status == "succeeded":
+                        successful_tasks.append(res)
+                    elif res.status in ["failed", "cancelled"]:
+                        error = getattr(res, 'error', None)
+                        error_msg = f"Code: {error.code}, Message: {error.message}" if error else "Failed/Cancelled"
+                        failed_tasks_info.append((current_task_id, error_msg)) 
                     else:
-                        break 
+                        next_poll_ids.append(current_task_id) 
+                
+                tasks_to_poll_ids = next_poll_ids
+                elapsed = time.time() - start_time
+                
+                value_to_send = min(int(elapsed), current_max - 1)
+                if elapsed > current_max:
+                     current_max = int(elapsed) + 1 
 
-            except comfy.model_management.InterruptProcessingException as e:
-                print(f"\n[JimengAI] Batch Interrupted by user. Attempting to cancel {len(tasks_to_poll_ids)} pending tasks...")
-                cancel_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.delete, task_id=tid) for tid in tasks_to_poll_ids]
-                await asyncio.gather(*cancel_coroutines, return_exceptions=True) 
-                print(f"[JimengAI] Info: Sent cancellation requests for pending tasks.")
-                raise e 
-            
-            finally:
-                print() 
                 if node_id and ps_instance:
-                    ps_instance.send_sync("progress", {"value": 0, "max": current_max, "node": node_id})
+                    ps_instance.send_sync("progress", {"value": value_to_send, "max": current_max, "node": node_id})
 
-            # 5. 轮询结束 - 处理结果
-            for tid, error_msg in failed_tasks_info:
-                self._log_batch_task_failure(error_msg, tid)
+                if tasks_to_poll_ids:
+                    if generation_count == 1:
+                        if info_printed: 
+                            print(f"[JimengAI] Polling Task {tasks_to_poll_ids[0]}: {int(elapsed)}s / {current_max}s elapsed...", end="\r")
+                    else:
+                        completed_tasks = len(successful_tasks) + len(failed_tasks_info)
+                        print(f"[JimengAI] Polling Batch: {completed_tasks}/{total_tasks} done. {len(tasks_to_poll_ids)} pending... ({int(elapsed)}s / {current_max}s Est.)", end="\r")
 
-            print(f"[JimengAI] Batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
-            
-            # 异常处理 (阻塞)
-            # 检查是否有任何任务成功
-            if not successful_tasks:
-                # 如果没有任何任务成功（无论是单个任务还是批处理中的所有任务）
-                if failed_tasks_info:
-                    # 如果有失败信息，报告第一个具体的失败原因
-                    first_task_id, first_error_msg = failed_tasks_info[0]
-                    error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
-                    if generation_count > 1:
-                        error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
-                    
-                    # 使用 self._create_failure_json 抛出异常, 中断工作流
-                    self._create_failure_json(error_to_raise, first_task_id)
+                    await asyncio.sleep(poll_interval)
                 else:
-                    # 如果没有成功也没有失败信息
-                    self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+                    break 
 
-            # 只有在至少有一个任务成功时，才继续处理并返回结果
+        except comfy.model_management.InterruptProcessingException as e:
+            print(f"\n[JimengAI] Batch Interrupted by user. Attempting to cancel {len(tasks_to_poll_ids)} pending tasks...")
+            cancel_coroutines = [asyncio.to_thread(ark_client.content_generation.tasks.delete, task_id=tid) for tid in tasks_to_poll_ids]
+            await asyncio.gather(*cancel_coroutines, return_exceptions=True) 
+            print(f"[JimengAI] Info: Sent cancellation requests for pending tasks.")
+            raise e 
+        
+        finally:
+            print() 
+            if node_id and ps_instance:
+                ps_instance.send_sync("progress", {"value": 0, "max": current_max, "node": node_id})
+
+        # 5. 轮询结束 - 处理结果
+        for tid, error_msg in failed_tasks_info:
+            self._log_batch_task_failure(error_msg, tid)
+
+        print(f"[JimengAI] Batch finished. {len(successful_tasks)} succeeded, {len(failed_tasks_info)} failed.")
+        
+        # 异常处理 (阻塞)
+        if not successful_tasks:
+            if failed_tasks_info:
+                first_task_id, first_error_msg = failed_tasks_info[0]
+                error_to_raise = f"Task {first_task_id} failed: {first_error_msg}"
+                if generation_count > 1:
+                    error_to_raise = f"All {generation_count} tasks failed. First error: {error_to_raise}"
+                
+                self._create_failure_json(error_to_raise, first_task_id)
+            else:
+                self._create_failure_json("Batch failed: No tasks succeeded and no specific errors were reported.", node_id)
+
+        # 在此处创建会话，仅用于本次下载
+        async with aiohttp.ClientSession() as session:
             return await self._handle_batch_success_async(successful_tasks, batch_save_path, generation_count, save_last_frame_batch, session)
+
+    # 通用生成逻辑
+    async def _common_generation_logic(
+        self, 
+        client, 
+        prompt, 
+        duration, 
+        resolution, 
+        aspect_ratio, 
+        seed, 
+        generation_count, 
+        batch_save_path, 
+        save_last_frame_batch, 
+        non_blocking, 
+        node_id,
+        
+        # 由子类提供的特定参数
+        model_name: str,
+        content: list,
+        forbidden_params: list[str],
+        prompt_extra_args: str = ""
+    ):
+        # 统一处理视频生成的通用逻辑
+        try:
+            # 1. 检查禁止的文本参数
+            _raise_if_text_params(prompt, forbidden_params)
+
+            # 2. API Seed 逻辑
+            api_seed = -1
+            if seed > 0:
+                api_seed = seed
+            
+            # 3. 计算时长参数
+            (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+            
+            # 4. 构建提示词字符串
+            prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --seed {api_seed} {prompt_extra_args.strip()}"
+            
+            # 5. 将文本提示词插入到内容列表的开头
+            content.insert(0, {"type": "text", "text": prompt_string})
+            
+            # 6. 检查中断
+            comfy.model_management.throw_exception_if_processing_interrupted()
+            
+            # 7. 决定保存路径
+            effective_save_path = "Jimeng" 
+            if generation_count > 1:
+                effective_save_path = batch_save_path
+            
+            # 8. 调用核心执行器
+            return await self._execute_batch_generation(
+                client=client,
+                model_name=model_name,
+                content=content,
+                estimation_duration=estimation_duration,
+                resolution=resolution,
+                generation_count=generation_count,
+                batch_save_path=effective_save_path,
+                save_last_frame_batch=save_last_frame_batch,
+                non_blocking=non_blocking,
+                node_id=node_id
+            )
+        
+        except (RuntimeError, TimeoutError, ValueError) as e:
+            raise e
+        except comfy.model_management.InterruptProcessingException as e:
+            raise e
+        except Exception as e:
+            raise RuntimeError(f"Failed to prepare task: {e}")
 
 
 class JimengVideoGeneration(JimengVideoBase):
@@ -698,76 +755,51 @@ class JimengVideoGeneration(JimengVideoBase):
     FUNCTION = "generate"
     OUTPUT_NODE = True 
     CATEGORY = GLOBAL_CATEGORY
-        
+    
     async def generate(self, client, model_choice, prompt, duration, resolution, aspect_ratio, camerafixed, seed, generation_count, batch_save_path, save_last_frame_batch, non_blocking=False, image=None, last_frame_image=None, node_id=None):
         
-        try:
-            # 1. 准备参数
-            _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "camerafixed", "seed"])
-
-            final_model_name = ""
-            if model_choice == "doubao-seedance-1-0-pro":
-                final_model_name = "doubao-seedance-1-0-pro-250528"
-            elif model_choice == "doubao-seedance-1-0-pro-fast":
-                final_model_name = "doubao-seedance-1-0-pro-fast-251015"
-            elif model_choice == "doubao-seedance-1-0-lite":
-                if image is None:
-                    final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
-                else:
-                    final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
-            
-            # Seed 逻辑: 0 或 -1 都使用 API 的 -1
-            api_seed = -1
-            if seed > 0:
-                api_seed = seed
-            
-            (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
-            
-            prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --camerafixed {'true' if camerafixed else 'false'} --seed {api_seed}"
-            
-            content = [{"type": "text", "text": prompt_string}]
-            
-            if image is not None:
-                first_frame_b64 = _image_to_base64(image)
-                first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
-                content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
-            
-            if last_frame_image is not None:
-                if model_choice == "doubao-seedance-1-0-pro-fast":
-                    raise ValueError(f"Model '{model_choice}' does not support last_frame_image. Please disconnect the last_frame_image input.")
-                if image is None:
-                    raise ValueError("A first frame image must be provided when using a last frame image.")
-                last_frame_b64 = _image_to_base64(last_frame_image)
-                last_frame_url = f"data:image/jpeg;base64,{last_frame_b64}"
-                content.append({"type": "image_url", "image_url": {"url": last_frame_url}, "role": "last_frame"})
-
-            comfy.model_management.throw_exception_if_processing_interrupted()
-            
-            # effective_save_path 是 OUTPUT 目录的子路径
-            effective_save_path = "Jimeng" 
-            if generation_count > 1:
-                effective_save_path = batch_save_path
-            
-            # 2. 调用基类执行器
-            return await self._execute_batch_generation(
-                client=client,
-                model_name=final_model_name,
-                content=content,
-                estimation_duration=estimation_duration,
-                resolution=resolution,
-                generation_count=generation_count,
-                batch_save_path=effective_save_path,
-                save_last_frame_batch=save_last_frame_batch,
-                non_blocking=non_blocking,
-                node_id=node_id
-            )
+        # 1. 准备模型名称
+        final_model_name = ""
+        if model_choice == "doubao-seedance-1-0-pro":
+            final_model_name = "doubao-seedance-1-0-pro-250528"
+        elif model_choice == "doubao-seedance-1-0-pro-fast":
+            final_model_name = "doubao-seedance-1-0-pro-fast-251015"
+        elif model_choice == "doubao-seedance-1-0-lite":
+            if image is None:
+                final_model_name = "doubao-seedance-1-0-lite-t2v-250428"
+            else:
+                final_model_name = "doubao-seedance-1-0-lite-i2v-250428"
         
-        except (RuntimeError, TimeoutError, ValueError) as e:
-            raise e
-        except comfy.model_management.InterruptProcessingException as e:
-            raise e
-        except Exception as e:
-            raise RuntimeError(f"Failed to prepare task: {e}")
+        # 2. 准备额外参数
+        prompt_extra_args = f"--camerafixed {'true' if camerafixed else 'false'}"
+        
+        # 3. 准备内容列表 (图像)
+        content = []
+        if image is not None:
+            first_frame_b64 = _image_to_base64(image)
+            first_frame_url = f"data:image/jpeg;base64,{first_frame_b64}"
+            content.append({"type": "image_url", "image_url": {"url": first_frame_url}, "role": "first_frame"})
+        
+        if last_frame_image is not None:
+            if model_choice == "doubao-seedance-1-0-pro-fast":
+                raise ValueError(f"Model '{model_choice}' does not support last_frame_image. Please disconnect the last_frame_image input.")
+            if image is None:
+                raise ValueError("A first frame image must be provided when using a last frame image.")
+            last_frame_b64 = _image_to_base64(last_frame_image)
+            last_frame_url = f"data:image/jpeg;base64,{last_frame_b64}"
+            content.append({"type": "image_url", "image_url": {"url": last_frame_url}, "role": "last_frame"})
+            
+        # 4. 准备禁止的参数列表
+        forbidden_params = ["resolution", "ratio", "dur", "frames", "camerafixed", "seed"]
+
+        # 5. 调用基类方法
+        return await self._common_generation_logic(
+            client, prompt, duration, resolution, aspect_ratio, seed, generation_count, batch_save_path, save_last_frame_batch, non_blocking, node_id,
+            model_name=final_model_name,
+            content=content,
+            forbidden_params=forbidden_params,
+            prompt_extra_args=prompt_extra_args
+        )
 
 
 class JimengReferenceImage2Video(JimengVideoBase):
@@ -810,54 +842,28 @@ class JimengReferenceImage2Video(JimengVideoBase):
 
     async def generate(self, client, prompt, duration, resolution, aspect_ratio, seed, generation_count, batch_save_path, save_last_frame_batch, non_blocking=False, ref_image_1=None, ref_image_2=None, ref_image_3=None, ref_image_4=None, node_id=None):
         
-        try:
-            # 1. 准备参数
-            _raise_if_text_params(prompt, ["resolution", "ratio", "dur", "frames", "seed"])
-            
-            # Seed 逻辑: 0 或 -1 都使用 API 的 -1
-            api_seed = -1
-            if seed > 0:
-                api_seed = seed
-                
-            model = "doubao-seedance-1-0-lite-i2v-250428"
-            
-            (duration_or_frames_arg, estimation_duration) = _calculate_duration_and_frames_args(duration)
+        # 1. 准备模型名称
+        model = "doubao-seedance-1-0-lite-i2v-250428"
+        
+        # 2. 准备内容列表 (图像)
+        content = []
+        ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
+        
+        for img_tensor in ref_images:
+            if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
+        if len(content) == 1: raise ValueError("At least one reference image must be provided.")
+        
+        # 3. 准备禁止的参数列表
+        forbidden_params = ["resolution", "ratio", "dur", "frames", "seed"]
 
-            prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --seed {api_seed}"
-            
-            content = [{"type": "text", "text": prompt_string}]
-            ref_images = [ref_image_1, ref_image_2, ref_image_3, ref_image_4]
-            
-            for img_tensor in ref_images:
-                if img_tensor is not None: content.append({ "type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_image_to_base64(img_tensor)}"}, "role": "reference_image" })
-            if len(content) == 1: raise ValueError("At least one reference image must be provided.")
-            
-            comfy.model_management.throw_exception_if_processing_interrupted()
-            
-            effective_save_path = "Jimeng" 
-            if generation_count > 1:
-                effective_save_path = batch_save_path
-            
-            # 2. 调用基类执行器
-            return await self._execute_batch_generation(
-                client=client,
-                model_name=model,
-                content=content,
-                estimation_duration=estimation_duration,
-                resolution=resolution,
-                generation_count=generation_count,
-                batch_save_path=effective_save_path, # 这是 output path
-                save_last_frame_batch=save_last_frame_batch,
-                non_blocking=non_blocking,
-                node_id=node_id
-            )
-
-        except (RuntimeError, TimeoutError, ValueError) as e:
-            raise e
-        except comfy.model_management.InterruptProcessingException as e:
-            raise e
-        except Exception as e:
-            raise RuntimeError(f"Failed to prepare task: {e}")
+        # 4. 调用基类方法
+        return await self._common_generation_logic(
+            client, prompt, duration, resolution, aspect_ratio, seed, generation_count, batch_save_path, save_last_frame_batch, non_blocking, node_id,
+            model_name=model,
+            content=content,
+            forbidden_params=forbidden_params,
+            prompt_extra_args="" # 此节点没有额外的提示词参数
+        )
 
 
 class JimengQueryTasks:
