@@ -8,7 +8,8 @@ import json
 from .nodes_shared import (
     GLOBAL_CATEGORY, 
     _image_to_base64, 
-    _download_url_to_image_tensor_async
+    _download_url_to_image_tensor_async,
+    get_text
 )
 
 class JimengSeedream3:
@@ -56,11 +57,11 @@ class JimengSeedream3:
             min_pixels = 512 * 512  
             max_pixels = 2048 * 2048 
             if not (min_pixels <= total_pixels <= max_pixels):
-                raise ValueError(f"Total pixels must be between {min_pixels} (512x512) and {max_pixels} (2048x2048). Your current: {total_pixels}")
+                raise ValueError(get_text("err_pixels_range").format(min=min_pixels, min_desc="512x512", max=max_pixels, max_desc="2048x2048", current=total_pixels))
 
             aspect_ratio = width / height
             if not (1/16 <= aspect_ratio <= 16):
-                raise ValueError(f"Aspect ratio must be between 1/16 and 16. Your current: {aspect_ratio}")
+                raise ValueError(get_text("err_aspect_ratio").format(min="1/16", max="16", current=aspect_ratio))
                 
             size_param = f"{width}x{height}"
         else:
@@ -95,7 +96,7 @@ class JimengSeedream3:
                 # 异步下载图像 URL 到 Tensor
                 image_tensor = await _download_url_to_image_tensor_async(session, resp.data[0].url)
                 if image_tensor is None:
-                    raise RuntimeError("Failed to download the generated image.")
+                    raise RuntimeError(get_text("err_download_img"))
                 
                 # 格式化输出响应
                 output_response = {
@@ -108,7 +109,7 @@ class JimengSeedream3:
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
-                raise RuntimeError(f"Failed to generate image with model {model_id}: {e}")
+                raise RuntimeError(get_text("err_gen_model").format(model=model_id, e=e))
 
 class JimengSeedream4:
     # 即梦 Seedream 4 文生图 & 图生图节点
@@ -142,9 +143,10 @@ class JimengSeedream4:
         sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
         n_input_images = 0
         if images is not None: n_input_images = images.shape[0]
-        if n_input_images > 10: raise ValueError("The number of input images cannot exceed 10.")
+        if n_input_images > 10: 
+            raise ValueError(get_text("err_img_limit_10"))
         if sequential_image_generation == "auto" and n_input_images + max_images > 15:
-            raise ValueError(f"The sum of input images ({n_input_images}) and max generated images ({max_images}) cannot exceed 15.")
+            raise ValueError(get_text("err_img_limit_15").format(n=n_input_images, max=max_images))
 
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         
@@ -154,11 +156,11 @@ class JimengSeedream4:
             min_pixels = 1280 * 720
             max_pixels = 4096 * 4096
             if not (min_pixels <= total_pixels <= max_pixels):
-                raise ValueError(f"Total pixels must be between {min_pixels} and {max_pixels}. Your current: {total_pixels}")
+                raise ValueError(get_text("err_pixels_range").format(min=min_pixels, min_desc="1280x720", max=max_pixels, max_desc="4096x4096", current=total_pixels))
 
             aspect_ratio = width / height
             if not (1/16 <= aspect_ratio <= 16):
-                raise ValueError(f"Aspect ratio must be between 1/16 and 16. Your current: {aspect_ratio}")
+                raise ValueError(get_text("err_aspect_ratio").format(min="1/16", max="16", current=aspect_ratio))
 
             size_str = f"{width}x{height}"
         else:
@@ -193,7 +195,8 @@ class JimengSeedream4:
                 download_tasks = [_download_url_to_image_tensor_async(session, item.url) for item in resp.data]
                 output_tensors = await asyncio.gather(*download_tasks)
                 valid_tensors = [t for t in output_tensors if t is not None]
-                if not valid_tensors: raise RuntimeError("Failed to download any of the generated images.")
+                if not valid_tensors: 
+                    raise RuntimeError(get_text("err_download_img"))
                 
                 # 格式化输出响应
                 image_data_list = []
@@ -213,7 +216,7 @@ class JimengSeedream4:
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
-                raise RuntimeError(f"Failed to generate with Seedream 4: {e}")
+                raise RuntimeError(get_text("err_gen_model").format(model="Seedream4", e=e))
 
 # 节点类映射
 NODE_CLASS_MAPPINGS = {

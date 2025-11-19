@@ -1,10 +1,20 @@
 [
   {
-    "customName": "我的即梦Key-1",
+    "customName": "API Key-1",
     "apiKey": "volc_key_goes_here"
   },
   {
-    "customName": "备用Key",
-    "apiKey": "another_volc_key_goes_here"
+    "customName": "API Key-2",
+    "apiKey": "volc_key_goes_here"
+  },
+  # 复制下方的代码块即可创建新的API Key存储
+  {
+    "customName": "API Key-3",
+    "apiKey": "volc_key_goes_here"
+  },
+  # 复制上方的代码块即可创建新的API Key存储
+  {
+    "customName": "API Key-XXX",
+    "apiKey": "volc_key_goes_here"
   }
 ]
