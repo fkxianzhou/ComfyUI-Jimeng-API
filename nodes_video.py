@@ -326,7 +326,12 @@ class JimengVideoBase:
                     elif res.status == "succeeded":
                         successful_tasks.append(res)
                     elif res.status in ["failed", "cancelled"]:
-                        failed_tasks_info.append((res.id, "Failed"))
+                        fail_reason = "Failed"
+                        if hasattr(res, 'error') and res.error:
+                            if hasattr(res.error, 'message'): fail_reason = res.error.message
+                            elif isinstance(res.error, dict) and 'message' in res.error: fail_reason = res.error['message']
+                            else: fail_reason = str(res.error)
+                        failed_tasks_info.append((res.id, fail_reason))
                     else:
                         pending_tasks.append(res)
 
@@ -338,7 +343,11 @@ class JimengVideoBase:
                 else:
                     del self.NON_BLOCKING_TASK_CACHE[node_id]
                     if not successful_tasks:
-                        self._create_failure_json("Batch failed: No tasks succeeded.")
+                        if failed_tasks_info:
+                            first_tid, first_msg = failed_tasks_info[0]
+                            self._create_failure_json(first_msg, task_id=first_tid)
+                        else:
+                            self._create_failure_json("Batch failed: No tasks succeeded.")
                     
                     ret_results = None
                     async with aiohttp.ClientSession() as session:
@@ -365,47 +374,36 @@ class JimengVideoBase:
         results = await asyncio.gather(*create_coroutines, return_exceptions=True)
 
         tasks_to_poll = []
-        creation_errors = []  # 初始化错误收集列表
+        creation_errors = []  
         creation_failed_count = 0
         
         for res in results:
             if isinstance(res, Exception):
                 log_msg("err_task_create", e=res)
-                creation_errors.append(res) # 收集异常对象
+                creation_errors.append(res) 
                 creation_failed_count += 1
             else:
                 tasks_to_poll.append(res)
 
         if not tasks_to_poll:
             log_msg("err_batch_fail_all")
-            
             final_error_msg = "All tasks failed on creation."
-            
             if creation_errors:
                 raw_error_str = str(creation_errors[0])
                 final_error_msg = raw_error_str 
-                
-                # 尝试提取更友好的 JSON 信息
                 try:
-                    # 寻找字典结构的起止位置
                     start_idx = raw_error_str.find('{')
                     end_idx = raw_error_str.rfind('}')
-                    
                     if start_idx != -1 and end_idx != -1:
                         dict_str = raw_error_str[start_idx : end_idx + 1]
                         error_data = ast.literal_eval(dict_str)
-                        
                         if isinstance(error_data, dict):
-                            # 优先提取 error.message
                             if 'error' in error_data and isinstance(error_data['error'], dict) and 'message' in error_data['error']:
                                 final_error_msg = error_data['error']['message']
-                            # 其次尝试直接的 message 字段
                             elif 'message' in error_data:
                                 final_error_msg = error_data['message']
                 except Exception:
-                    # 解析失败时，不做任何操作，final_error_msg 保持为 raw_error_str
                     pass
-
             self._create_failure_json(final_error_msg)
         
         if generation_count > 1:
@@ -447,7 +445,18 @@ class JimengVideoBase:
                     elif res.status == "succeeded":
                         successful_tasks.append(res)
                     elif res.status in ["failed", "cancelled"]:
-                        failed_tasks_info.append((current_task_id, "Failed")) 
+                        fail_reason = "Failed"
+                        if hasattr(res, 'error') and res.error:
+                            if hasattr(res.error, 'message'):
+                                fail_reason = res.error.message
+                            elif isinstance(res.error, dict) and 'message' in res.error:
+                                fail_reason = res.error['message']
+                            else:
+                                fail_reason = str(res.error)
+                        elif res.status == "cancelled":
+                            fail_reason = "Cancelled"
+                            
+                        failed_tasks_info.append((current_task_id, fail_reason)) 
                     else:
                         next_poll_ids.append(current_task_id) 
                 
@@ -488,7 +497,11 @@ class JimengVideoBase:
             log_msg("batch_finished_stats", success=len(successful_tasks), failed=len(failed_tasks_info))
         
         if not successful_tasks:
-             self._create_failure_json("Batch failed: No tasks succeeded.")
+             if failed_tasks_info:
+                 first_tid, first_msg = failed_tasks_info[0]
+                 self._create_failure_json(first_msg, task_id=first_tid)
+             else:
+                 self._create_failure_json("Batch failed: No tasks succeeded.")
 
         ret_results = None
         async with aiohttp.ClientSession() as session:
