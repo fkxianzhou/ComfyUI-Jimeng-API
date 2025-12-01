@@ -1,5 +1,3 @@
-WEB_DIRECTORY = "web"
-
 from .nodes_shared import NODE_CLASS_MAPPINGS as shared_class_mappings, NODE_DISPLAY_NAME_MAPPINGS as shared_display_mappings
 from .nodes_image import NODE_CLASS_MAPPINGS as image_class_mappings, NODE_DISPLAY_NAME_MAPPINGS as image_display_mappings
 from .nodes_video import NODE_CLASS_MAPPINGS as video_class_mappings, NODE_DISPLAY_NAME_MAPPINGS as video_display_mappings
@@ -16,4 +14,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     **video_display_mappings
 }
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
+WEB_DIRECTORY = "./web"
+
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
