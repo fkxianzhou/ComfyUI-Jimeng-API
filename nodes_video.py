@@ -71,7 +71,25 @@ async def _get_api_estimated_time_async(ark_client, model_name: str, duration: i
                 continue
             
             item_duration = getattr(item, 'duration', 0)
-            task_time = item.updated_at - item.created_at
+
+            t_start = item.created_at
+            t_end = item.updated_at
+            if hasattr(t_start, 'timestamp'): t_start = t_start.timestamp()
+            if hasattr(t_end, 'timestamp'): t_end = t_end.timestamp()
+            
+            raw_diff = float(t_end) - float(t_start)
+
+            try:
+                local_offset = datetime.datetime.now().astimezone().utcoffset().total_seconds()
+            except Exception:
+                local_offset = 0
+
+            fixed_diff = raw_diff - local_offset
+
+            if fixed_diff > 0 and abs(fixed_diff) < abs(raw_diff):
+                task_time = fixed_diff
+            else:
+                task_time = raw_diff
 
             if task_time <= 0 or item_duration <= 0:
                 continue
