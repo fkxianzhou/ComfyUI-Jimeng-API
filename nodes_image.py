@@ -120,6 +120,7 @@ class JimengSeedream4:
         return {
             "required": {
                 "client": ("JIMENG_CLIENT",),
+                "model_version": (["doubao-seedream-4.0", "doubao-seedream-4.5"],),
                 "prompt": ("STRING", {"multiline": True, "default": ""}),
                 "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],),
                 "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}),
@@ -138,7 +139,7 @@ class JimengSeedream4:
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, prompt, generation_mode, max_images, size, width, height, seed, watermark, images=None):
+    async def generate(self, client, model_version, prompt, generation_mode, max_images, size, width, height, seed, watermark, images=None):
         # 节点的主要异步执行函数
         sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
         n_input_images = 0
@@ -150,6 +151,13 @@ class JimengSeedream4:
 
         actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         
+        # 映射模型版本到后端 ID
+        model_id_map = {
+            "doubao-seedream-4.0": "doubao-seedream-4-0-250828",
+            "doubao-seedream-4.5": "doubao-seedream-4-5-251128"
+        }
+        model_id = model_id_map.get(model_version, "doubao-seedream-4-0-250828")
+
         # 处理分辨率
         if size == "Custom":
             total_pixels = width * height
@@ -186,7 +194,7 @@ class JimengSeedream4:
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 
                 # 调用 API
-                resp = await openai_client.images.generate(model="doubao-seedream-4-0-250828", prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
+                resp = await openai_client.images.generate(model=model_id, prompt=prompt, size=size_str, response_format="url", extra_body=extra_body)
                 
                 # 检查中断
                 comfy.model_management.throw_exception_if_processing_interrupted()
@@ -216,7 +224,7 @@ class JimengSeedream4:
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
-                raise RuntimeError(get_text("err_gen_model").format(model="Seedream4", e=e))
+                raise RuntimeError(get_text("err_gen_model").format(model=model_version, e=e))
 
 # 节点类映射
 NODE_CLASS_MAPPINGS = {
