@@ -70,6 +70,7 @@ LOG_TRANSLATIONS = {
         "err_gen_model": "[JimengAI] 模型 {model} 生成失败: {e}",
         "err_img_limit_10": "[JimengAI] 参数错误: 输入图像数量不能超过 10 张。",
         "err_img_limit_15": "[JimengAI] 参数错误: 输入图像数 ({n}) 与最大生成数 ({max}) 之和不能超过 15。",
+        "err_img_limit_group_15": "[JimengAI] 参数错误: 在组图模式下，输入参考图数量 ({n}) 加 生成图片数量 ({max}) 的总和 ({total}) 不能超过 15 张。",
 
         # API Key 相关
         "combo_no_keys": "未找到密钥 (请配置 api_keys.json)",
@@ -122,6 +123,7 @@ LOG_TRANSLATIONS = {
         "err_gen_model": "[JimengAI] Failed to generate image with model {model}: {e}",
         "err_img_limit_10": "[JimengAI] Parameter Error: The number of input images cannot exceed 10.",
         "err_img_limit_15": "[JimengAI] Parameter Error: The sum of input images ({n}) and max generated images ({max}) cannot exceed 15.",
+        "err_img_limit_group_15": "[JimengAI] Parameter Error: The sum of input images ({n}) and max generated images ({max}) cannot exceed 15 in group mode (Total: {total}).",
 
         # API Key
         "combo_no_keys": "No Keys Found (Check api_keys.json)",

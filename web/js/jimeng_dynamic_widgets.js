@@ -34,7 +34,7 @@ function updateNodeHeight(node) {
     app.graph.setDirtyCanvas(true, true);
 }
 
-const TARGET_WIDGETS = ['size', 'generation_mode', 'generation_count'];
+const TARGET_WIDGETS = ['size', 'enable_group_generation', 'generation_count'];
 
 function widgetLogic(node, widget) {
     if (node.comfyClass === "JimengSeedream3" || node.comfyClass === "JimengSeedream4") {
@@ -49,8 +49,8 @@ function widgetLogic(node, widget) {
     }
 
     if (node.comfyClass === "JimengSeedream4") {
-        if (widget.name === 'generation_mode') {
-            const isGroupMode = widget.value === "Image Group (auto)";
+        if (widget.name === 'enable_group_generation') {
+            const isGroupMode = widget.value === true;
             const maxImagesWidget = findWidgetByName(node, 'max_images');
             
             if (maxImagesWidget) toggleWidget(node, maxImagesWidget, isGroupMode);

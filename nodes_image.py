@@ -120,9 +120,9 @@ class JimengSeedream4:
         return {
             "required": {
                 "client": ("JIMENG_CLIENT",),
-                "model_version": (["doubao-seedream-4.0", "doubao-seedream-4.5"],),
+                "model_version": (["doubao-seedream-4.5", "doubao-seedream-4.0"],),
                 "prompt": ("STRING", {"multiline": True, "default": ""}),
-                "generation_mode": (["Single Image (disabled)", "Image Group (auto)"],),
+                "enable_group_generation": ("BOOLEAN", {"default": False, "label_on": "On (Group)", "label_off": "Off (Single)"}),
                 "max_images": ("INT", {"default": 1, "min": 1, "max": 15, "step": 1}),
                 "size": (s.RECOMMENDED_SIZES,),
                 "width": ("INT", {"default": 2048, "min": 1, "max": 8192, "step": 1}),
@@ -139,25 +139,32 @@ class JimengSeedream4:
     FUNCTION = "generate"
     CATEGORY = GLOBAL_CATEGORY
 
-    async def generate(self, client, model_version, prompt, generation_mode, max_images, size, width, height, seed, watermark, images=None):
+    async def generate(self, client, model_version, prompt, enable_group_generation, max_images, size, width, height, seed, watermark, images=None):
         # 节点的主要异步执行函数
-        sequential_image_generation = "disabled" if "disabled" in generation_mode else "auto"
-        n_input_images = 0
-        if images is not None: n_input_images = images.shape[0]
-        if n_input_images > 10: 
-            raise ValueError(get_text("err_img_limit_10"))
-        if sequential_image_generation == "auto" and n_input_images + max_images > 15:
-            raise ValueError(get_text("err_img_limit_15").format(n=n_input_images, max=max_images))
-
-        actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
         
-        # 映射模型版本到后端 ID
         model_id_map = {
             "doubao-seedream-4.0": "doubao-seedream-4-0-250828",
             "doubao-seedream-4.5": "doubao-seedream-4-5-251128"
         }
         model_id = model_id_map.get(model_version, "doubao-seedream-4-0-250828")
 
+        # 根据 enable_group_generation 布尔值设置 API 参数
+        sequential_param = "auto" if enable_group_generation else "disabled"
+
+        n_input_images = 0
+        if images is not None: 
+            n_input_images = images.shape[0]
+
+        # 校验逻辑
+        if sequential_param == "auto":
+            total_count = n_input_images + max_images
+            if total_count > 15:
+                raise ValueError(get_text("err_img_limit_group_15").format(n=n_input_images, max=max_images, total=total_count))
+        else:
+            pass
+
+        actual_seed = random.randint(0, 2147483647) if seed == -1 else seed
+        
         # 处理分辨率
         if size == "Custom":
             total_pixels = width * height
@@ -174,7 +181,7 @@ class JimengSeedream4:
         else:
             size_str = size.split(" ")[0]
         
-        # 处理输入的图像（可能为多个）
+        # 处理输入的图像
         image_param = None
         if images is not None:
             image_b64_list = [_image_to_base64(images[i:i+1]) for i in range(n_input_images)]
@@ -182,11 +189,18 @@ class JimengSeedream4:
             else: image_param = [f"data:image/jpeg;base64,{b64}" for b64 in image_b64_list]
 
         # 准备 API 请求体
-        extra_body = {"seed": actual_seed, "watermark": watermark, "sequential_image_generation": sequential_image_generation}
-        if image_param: extra_body["image"] = image_param
-        if sequential_image_generation == "auto":
-            extra_body['sequential_image_generation_options'] = {"max_images": max_images}
+        extra_body = {
+            "seed": actual_seed, 
+            "watermark": watermark, 
+            "sequential_image_generation": sequential_param
+        }
 
+        if image_param: 
+            extra_body["image"] = image_param
+            
+        if sequential_param == "auto":
+            extra_body['sequential_image_generation_options'] = {"max_images": max_images}
+            
         openai_client = client.openai
         async with aiohttp.ClientSession() as session:
             try:

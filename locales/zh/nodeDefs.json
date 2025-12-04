@@ -87,13 +87,9 @@
         "name": "提示词",
         "tooltip": "用于图像生成的文本提示词"
       },
-      "generation_mode": {
-        "name": "生成模式",
-        "tooltip": "选择单图或组图生成",
-        "options": {
-          "Single Image (disabled)": "单图模式 (禁用组图)",
-          "Image Group (auto)": "组图模式 (自动)"
-        }
+      "enable_group_generation": {
+        "name": "启用组图生成",
+        "tooltip": "开启 (True) 则生成一组内容关联的图片；关闭 (False) 则生成单张图片。"
       },
       "max_images": {
         "name": "最大图片数",
