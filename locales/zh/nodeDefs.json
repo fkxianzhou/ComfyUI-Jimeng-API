@@ -1,31 +1,31 @@
 {
   "JimengAPIClient": {
-    "display_name": "即梦API客户端",
-    "description": "加载 `api_keys.json` 文件中指定的 API 密钥，并创建一个可供其他即梦 AI 节点使用的客户端实例。",
+    "display_name": "火山方舟 API 客户端",
+    "description": "加载 `api_keys.json` 文件中指定的 API 密钥，并创建一个可供其他节点使用的客户端实例。",
     "inputs": {
       "key_name": {
         "name": "密钥名称",
-        "tooltip": "在 api_keys.json 中配置的自定义密钥名称"
+        "tooltip": "在 api_keys.json 中配置的自定义密钥名称。"
       }
     },
     "outputs": {
       "0": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端实例"
+        "tooltip": "火山方舟 API 客户端实例。"
       }
     }
   },
   "JimengSeedream3": {
-    "display_name": "即梦Seedream 3",
-    "description": "使用即梦 Seedream 3 模型进行文本到图像或图像到图像的生成。",
+    "display_name": "图像生成（Seedream 3）",
+    "description": "使用 Seedream 3 模型生成图像。",
     "inputs": {
       "client": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端"
+        "tooltip": "火山方舟 API 客户端。"
       },
       "prompt": {
         "name": "提示词",
-        "tooltip": "用于图像生成的文本提示词"
+        "tooltip": "用于图像生成的文本提示词。"
       },
       "size": {
         "name": "尺寸",
@@ -33,67 +33,67 @@
       },
       "width": {
         "name": "宽度",
-        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）"
+        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）。"
       },
       "height": {
         "name": "高度",
-        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）"
+        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）。"
       },
       "seed": {
         "name": "种子",
-        "tooltip": "随机种子，-1 表示随机"
+        "tooltip": "用于控制生成内容的随机性，相同的请求下，模型收到相同的seed值，会生成类似的结果，但不保证完全一致。"
       },
       "guidance_scale": {
         "name": "引导系数",
-        "tooltip": "提示词的引导强度"
+        "tooltip": "提示词的引导强度。"
+      },
+      "generation_count": {
+        "name": "生成数量",
+        "tooltip": "一次性并发生成的批次数量。"
       },
       "watermark": {
         "name": "水印",
-        "tooltip": "是否在生成的图像上添加水印"
+        "tooltip": "是否在生成的图像上添加水印。"
       },
       "image": {
         "name": "输入图像",
-        "tooltip": "用于图生图（Seededit 3）的可选输入图像"
+        "tooltip": "用于图生图的可选输入图像。"
       }
     },
     "outputs": {
       "0": {
         "name": "图像",
-        "tooltip": "生成的图像"
+        "tooltip": "生成的图像。"
       },
       "1": {
         "name": "响应",
-        "tooltip": "API 的 JSON 格式响应"
+        "tooltip": "API 的 JSON 格式响应。"
       }
     }
   },
   "JimengSeedream4": {
-    "display_name": "即梦Seedream 4",
-    "description": "使用即梦 Seedream 4 模型生成图像，支持单图或组图（自动）模式。",
+    "display_name": "图像生成（Seedream 4）",
+    "description": "使用 Seedream 4 模型生成图像，支持单图或组图（自动）模式。",
     "inputs": {
       "client": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端"
+        "tooltip": "火山方舟 API 客户端。"
       },
       "model_version": {
         "name": "模型版本",
-        "tooltip": "选择 Seedream 模型版本",
-        "options": {
-          "doubao-seedream-4.0": "Seedream 4.0",
-          "doubao-seedream-4.5": "Seedream 4.5"
-        }
+        "tooltip": "选择要使用的 Seedream4 模型版本。"
       },
       "prompt": {
         "name": "提示词",
-        "tooltip": "用于图像生成的文本提示词"
+        "tooltip": "用于图像生成的文本提示词。"
       },
       "enable_group_generation": {
         "name": "启用组图生成",
-        "tooltip": "开启 (True) 则生成一组内容关联的图片；关闭 (False) 则生成单张图片。"
+        "tooltip": "基于输入的内容，生成的一组内容关联的图片。"
       },
       "max_images": {
         "name": "最大图片数",
-        "tooltip": "在组图模式下生成的最大图像数量"
+        "tooltip": "在组图模式下生成的最大图像数量。"
       },
       "size": {
         "name": "尺寸",
@@ -104,83 +104,103 @@
       },
       "width": {
         "name": "宽度",
-        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）"
+        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）。"
       },
       "height": {
         "name": "高度",
-        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）"
+        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）。"
       },
       "seed": {
         "name": "种子",
-        "tooltip": "随机种子，-1 表示随机"
+        "tooltip": "Seedream4 模型不支持该参数，此功能仅用于刷新ComfyUI缓存"
+      },
+      "generation_count": {
+        "name": "生成数量",
+        "tooltip": "一次性并发生成的批次数量。"
       },
       "watermark": {
         "name": "水印",
-        "tooltip": "是否在生成的图像上添加水印"
+        "tooltip": "是否在生成的图像上添加水印。"
       },
       "images": {
         "name": "输入图像",
-        "tooltip": "用于图生图的输入图像（最多10张）"
+        "tooltip": "用于图生图的输入图像。"
       }
     },
     "outputs": {
       "0": {
         "name": "图像",
-        "tooltip": "生成的图像（批处理）"
+        "tooltip": "生成的图像。"
       },
       "1": {
         "name": "响应",
-        "tooltip": "API 的 JSON 格式响应"
+        "tooltip": "API 的 JSON 格式响应。"
       }
     }
   },
-  "JimengVideoGeneration": {
-    "display_name": "即梦视频生成",
-    "description": "即梦 AI 视频生成节点。支持纯文本生成（T2V），或使用首帧/尾帧图像进行视频生成（I2V）。",
+  "JimengSeedance1": {
+    "display_name": "视频生成（Seedance 1.0）",
+    "description": "使用 Seedance 1.0 模型生成视频。",
     "inputs": {
       "client": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端"
+        "tooltip": "火山方舟 API 客户端。"
       },
-      "model_choice": {
-        "name": "模型选择",
-        "tooltip": "选择要使用的视频生成模型"
+      "model_version": {
+        "name": "模型版本",
+        "tooltip": "选择要使用的视频生成模型。"
       },
       "prompt": {
         "name": "提示词",
-        "tooltip": "用于视频生成的文本提示词"
+        "tooltip": "用于视频生成的文本提示词。"
       },
       "duration": {
         "name": "时长 (秒)",
-        "tooltip": "视频的期望时长（秒）"
+        "tooltip": "视频的期望时长。"
       },
       "resolution": {
         "name": "分辨率",
-        "tooltip": "视频的分辨率（480p, 720p, 1080p）"
+        "tooltip": "视频的分辨率。"
       },
       "aspect_ratio": {
         "name": "宽高比",
-        "tooltip": "视频的宽高比"
+        "tooltip": "视频的宽高比。"
       },
       "camerafixed": {
         "name": "固定镜头",
-        "tooltip": "是否固定镜头"
+        "tooltip": "是否固定镜头。"
+      },
+      "enable_random_seed": {
+        "name": "使用随机种子",
+        "tooltip": "启用后将直接使用 API 服务端生成的随机种子，此时本地设置的种子数值将被忽略。"
       },
       "seed": {
         "name": "种子",
-        "tooltip": "随机种子，-1 表示随机"
+        "tooltip": "用于控制生成内容的随机性，相同的请求下，模型收到相同的seed值，会生成类似的结果，但不保证完全一致。"
       },
       "generation_count": {
         "name": "生成数量",
         "tooltip": "一次性并发生成的任务数量。如果大于1，将激活批量保存功能。"
       },
-      "batch_save_path": {
-        "name": "批量保存路径",
-        "tooltip": "当生成数量大于1时，所有视频和尾帧将被保存到 ComfyUI 'output' 目录下的这个子路径中。"
+      "filename_prefix": {
+        "name": "文件名前缀",
+        "tooltip": "生成数量大于1时，要保存文件的前缀。可以包含格式化信息，如 %date:yyyy-MM-dd% 或 %EmptyLatentImage.width%，以包含来自节点的值。"
       },
       "save_last_frame_batch": {
-        "name": "批量保存尾帧",
-        "tooltip": "当生成数量大于1时，是否同时保存所有视频的最后一帧。"
+        "name": "保存尾帧",
+        "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
+      },
+      "enable_timeout_setting": {
+        "name": "任务超时阈值",
+        "tooltip": "启用后可设置任务提交后的过期时间。"
+      },
+      "timeout_seconds": {
+        "name": "超时时间 (秒)",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+      },
+      "enable_offline_inference": {
+        "name": "离线推理模式",
+        "tooltip": "启用后将使用 'flex' 服务等级，推理成本更低，但等待时间可能较长。"
       },
       "non_blocking": {
         "name": "非阻塞模式",
@@ -188,67 +208,183 @@
       },
       "image": {
         "name": "首帧图像",
-        "tooltip": "用于图生视频的可选起始图像"
+        "tooltip": "用于图生视频的可选起始图像。"
       },
       "last_frame_image": {
         "name": "尾帧图像",
-        "tooltip": "用于图生视频的可选结束图像（需要首帧）"
+        "tooltip": "用于图生视频的可选结束图像（需要首帧）。"
       }
     },
     "outputs": {
       "0": {
         "name": "视频",
-        "tooltip": "生成的视频文件（批量生成时为按种子排序的第一个）"
+        "tooltip": "生成的视频文件（批量生成时为按种子排序的第一个）。"
       },
       "1": {
         "name": "最后一帧",
-        "tooltip": "生成的视频的最后一帧图像（批量生成时为按种子排序的第一个）"
+        "tooltip": "生成的视频的最后一帧图像（批量生成时为按种子排序的第一个）。"
       },
       "2": {
         "name": "响应",
-        "tooltip": "API 的 JSON 格式响应（批量生成时为列表）"
+        "tooltip": "API 的 JSON 格式响应（批量生成时为列表）。"
       }
     }
   },
-  "JimengReferenceImage2Video": {
-    "display_name": "即梦参考图转视频",
-    "description": "即梦 AI 参考图转视频节点。根据输入的提示词和一张或多张参考图像来生成视频。",
+  "JimengSeedance1_5": {
+    "display_name": "视频生成（Seedance 1.5 Pro）",
+    "description": "使用 Seedance 1.5 Pro 模型生成视频，支持音频生成。",
     "inputs": {
       "client": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端"
+        "tooltip": "火山方舟 API 客户端。"
+      },
+      "model_version": {
+        "name": "模型版本",
+        "tooltip": "选择要使用的视频生成模型。"
       },
       "prompt": {
         "name": "提示词",
-        "tooltip": "用于视频生成的文本提示词"
+        "tooltip": "用于视频生成的文本提示词。"
+      },
+      "generate_audio": {
+        "name": "生成音频",
+        "tooltip": "开启后，模型输出的视频将包含同步音频。"
+      },
+      "auto_duration": {
+        "name": "智能时长",
+        "tooltip": "启用后，将忽略下方时长设置，由 API 自主选择合适的视频长度。"
       },
       "duration": {
         "name": "时长 (秒)",
-        "tooltip": "视频的期望时长（秒）"
+        "tooltip": "视频的期望时长。"
       },
       "resolution": {
         "name": "分辨率",
-        "tooltip": "视频的分辨率（480p, 720p）"
+        "tooltip": "视频的分辨率。"
       },
       "aspect_ratio": {
         "name": "宽高比",
-        "tooltip": "视频的宽高比"
+        "tooltip": "视频的宽高比。选择adaptive时，模型会根据用户提示词，智能选择最合适的宽高比。"
+      },
+      "camerafixed": {
+        "name": "固定镜头",
+        "tooltip": "是否固定镜头。"
+      },
+      "enable_random_seed": {
+        "name": "使用随机种子",
+        "tooltip": "启用后将直接使用 API 服务端生成的随机种子，此时本地设置的种子数值将被忽略。"
       },
       "seed": {
         "name": "种子",
-        "tooltip": "随机种子，-1 表示随机"
+        "tooltip": "用于控制生成内容的随机性，相同的请求下，模型收到相同的seed值，会生成类似的结果，但不保证完全一致。"
       },
       "generation_count": {
         "name": "生成数量",
         "tooltip": "一次性并发生成的任务数量。如果大于1，将激活批量保存功能。"
       },
-      "batch_save_path": {
-        "name": "批量保存路径",
-        "tooltip": "当生成数量大于1时，所有视频和尾帧将被保存到 ComfyUI 'output' 目录下的这个子路径中。"
+      "filename_prefix": {
+        "name": "文件名前缀",
+        "tooltip": "生成数量大于1时，要保存文件的前缀。可以包含格式化信息，如 %date:yyyy-MM-dd% 或 %EmptyLatentImage.width%，以包含来自节点的值。"
       },
       "save_last_frame_batch": {
-        "name": "批量保存尾帧",
-        "tooltip": "当生成数量大于1时，是否同时保存所有视频的最后一帧。"
+        "name": "保存尾帧",
+        "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
+      },
+      "enable_timeout_setting": {
+        "name": "任务超时阈值",
+        "tooltip": "启用后可设置任务提交后的过期时间。"
+      },
+      "timeout_seconds": {
+        "name": "超时时间 (秒)",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+      },
+      "enable_offline_inference": {
+        "name": "离线推理模式",
+        "tooltip": "启用后将使用 'flex' 服务等级，推理成本更低，但等待时间可能较长。"
+      },
+      "non_blocking": {
+        "name": "非阻塞模式",
+        "tooltip": "启用后，任务将提交到后台执行，工作流将暂停。再次运行时会检查任务状态。"
+      },
+      "image": {
+        "name": "首帧图像",
+        "tooltip": "用于图生视频的可选起始图像。"
+      },
+      "last_frame_image": {
+        "name": "尾帧图像",
+        "tooltip": "用于图生视频的可选结束图像（需要首帧）。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "视频",
+        "tooltip": "生成的视频文件（批量生成时为按种子排序的第一个）。"
+      },
+      "1": {
+        "name": "最后一帧",
+        "tooltip": "生成的视频的最后一帧图像（批量生成时为按种子排序的第一个）。"
+      },
+      "2": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应（批量生成时为列表）。"
+      }
+    }
+  },
+  "JimengReferenceImage2Video": {
+    "display_name": "参考图生视频（Seedance 1.0 lite）",
+    "description": "使用 Seedance 1.0 lite 模型生成视频，根据输入的提示词和一张或多张参考图像来生成视频。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "火山方舟 API 客户端。"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于视频生成的文本提示词。"
+      },
+      "duration": {
+        "name": "时长 (秒)",
+        "tooltip": "视频的期望时长。"
+      },
+      "resolution": {
+        "name": "分辨率",
+        "tooltip": "视频的分辨率。"
+      },
+      "aspect_ratio": {
+        "name": "宽高比",
+        "tooltip": "视频的宽高比。"
+      },
+      "enable_random_seed": {
+        "name": "使用随机种子",
+        "tooltip": "启用后将直接使用 API 服务端生成的随机种子，此时本地设置的种子数值将被忽略。"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "用于控制生成内容的随机性，相同的请求下，模型收到相同的seed值，会生成类似的结果，但不保证完全一致。"
+      },
+      "generation_count": {
+        "name": "生成数量",
+        "tooltip": "一次性并发生成的任务数量。如果大于1，将激活批量保存功能。"
+      },
+      "filename_prefix": {
+        "name": "文件名前缀",
+        "tooltip": "生成数量大于1时，要保存文件的前缀。可以包含格式化信息，如 %date:yyyy-MM-dd% 或 %EmptyLatentImage.width%，以包含来自节点的值。"
+      },
+      "save_last_frame_batch": {
+        "name": "保存尾帧",
+        "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
+      },
+      "enable_timeout_setting": {
+        "name": "任务超时阈值",
+        "tooltip": "启用后可设置任务提交后的过期时间。"
+      },
+      "timeout_seconds": {
+        "name": "超时时间 (秒)",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+      },
+      "enable_offline_inference": {
+        "name": "离线推理模式",
+        "tooltip": "启用后将使用 'flex' 服务等级，推理成本更低，但等待时间可能较长。"
       },
       "non_blocking": {
         "name": "非阻塞模式",
@@ -256,29 +392,29 @@
       },
       "ref_image_1": {
         "name": "参考图 1",
-        "tooltip": "参考图像 1（至少需要一张）"
+        "tooltip": "参考图像。"
       },
       "ref_image_2": {
         "name": "参考图 2",
-        "tooltip": "可选的参考图像 2"
+        "tooltip": "可选的参考图像。"
       },
       "ref_image_3": {
         "name": "参考图 3",
-        "tooltip": "可选的参考图像 3"
+        "tooltip": "可选的参考图像。"
       },
       "ref_image_4": {
         "name": "参考图 4",
-        "tooltip": "可选的参考图像 4"
+        "tooltip": "可选的参考图像。"
       }
     },
     "outputs": {
       "0": {
         "name": "视频",
-        "tooltip": "生成的视频文件（批量生成时为按种子排序的第一个）"
+        "tooltip": "生成的视频文件（批量生成时为按种子排序的第一个）。"
       },
       "1": {
         "name": "最后一帧",
-        "tooltip": "生成的视频的最后一帧图像（批量生成时为按种子排序的第一个）"
+        "tooltip": "生成的视频的最后一帧图像（批量生成时为按种子排序的第一个）。"
       },
       "2": {
         "name": "响应",
@@ -286,55 +422,47 @@
       }
     }
   },
-  "JimengQueryTasks": {
-    "display_name": "即梦视频生成任务列表查询",
-    "description": "查询符合条件的即梦 API 视频生成任务列表",
+  "JimengVideoQueryTasks": {
+    "display_name": "视频生成任务列表查询",
+    "description": "查询符合条件的视频生成任务列表。",
     "inputs": {
       "client": {
         "name": "客户端",
-        "tooltip": "即梦 API 客户端"
+        "tooltip": "火山方舟 API 客户端。"
       },
       "page_num": {
         "name": "页码",
-        "tooltip": "查询的页码"
+        "tooltip": "查询的页码。"
       },
       "page_size": {
         "name": "每页数量",
-        "tooltip": "每页返回的任务数量"
+        "tooltip": "每页返回的任务数量。"
       },
       "status": {
         "name": "任务状态",
-        "tooltip": "要过滤的任务状态",
-        "options": {
-          "all": "全部状态",
-          "succeeded": "成功",
-          "failed": "失败",
-          "running": "运行中",
-          "queued": "排队中",
-          "cancelled": "已取消"
-        }
+        "tooltip": "要过滤的任务状态。"
+      },
+      "service_tier": {
+        "name": "服务等级",
+        "tooltip": "按服务等级过滤任务。"
       },
       "task_ids": {
-        "name": "任务ID列表",
-        "tooltip": "要查询的特定任务ID（每行一个）"
+        "name": "任务ID",
+        "tooltip": "要查询的特定任务ID。"
       },
-      "model_choice": {
+      "model_version": {
         "name": "模型选择",
-        "tooltip": "按特定模型过滤"
-      },
-      "custom_model_id": {
-        "name": "自定义推理接入点ID",
-        "tooltip": "按自定义模型ID过滤（优先于模型选择）"
+        "tooltip": "按特定模型过滤。"
       }
     },
     "outputs": {
       "0": {
         "name": "查询结果",
-        "tooltip": "查询到的任务列表（JSON 字符串）"
+        "tooltip": "查询到的任务列表（JSON 字符串）。"
       },
       "1": {
         "name": "任务数量",
-        "tooltip": "符合条件的总任务数量"
+        "tooltip": "符合条件的总任务数量。"
       }
     }
   }
