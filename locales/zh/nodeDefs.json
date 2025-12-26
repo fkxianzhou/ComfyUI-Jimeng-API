@@ -97,7 +97,7 @@
       },
       "size": {
         "name": "尺寸",
-        "tooltip": "预设的图像尺寸。如果选择 'Custom'，将使用 '宽度' 和 '高度'。",
+        "tooltip": "预设的图像尺寸。选择adaptive时，模型会根据用户提示词，智能选择最合适的宽高比。",
         "options": {
           "Custom": "自定义"
         }
@@ -190,13 +190,9 @@
         "name": "保存尾帧",
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
-      "enable_timeout_setting": {
-        "name": "任务超时阈值",
-        "tooltip": "启用后可设置任务提交后的过期时间。"
-      },
       "timeout_seconds": {
-        "name": "超时时间 (秒)",
-        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+        "name": "任务超时阈值",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {
         "name": "离线推理模式",
@@ -290,13 +286,9 @@
         "name": "保存尾帧",
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
-      "enable_timeout_setting": {
-        "name": "任务超时阈值",
-        "tooltip": "启用后可设置任务提交后的过期时间。"
-      },
       "timeout_seconds": {
-        "name": "超时时间 (秒)",
-        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+        "name": "任务超时阈值",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {
         "name": "离线推理模式",
@@ -374,13 +366,9 @@
         "name": "保存尾帧",
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
-      "enable_timeout_setting": {
-        "name": "任务超时阈值",
-        "tooltip": "启用后可设置任务提交后的过期时间。"
-      },
       "timeout_seconds": {
-        "name": "超时时间 (秒)",
-        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）。"
+        "name": "任务超时阈值",
+        "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {
         "name": "离线推理模式",
@@ -453,6 +441,10 @@
       "model_version": {
         "name": "模型选择",
         "tooltip": "按特定模型过滤。"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "无实际意义，此功能仅用于刷新ComfyUI缓存"
       }
     },
     "outputs": {

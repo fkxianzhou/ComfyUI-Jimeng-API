@@ -7,7 +7,6 @@ from .constants import LOG_TRANSLATIONS
 # V3 API 引入
 from comfy_api.latest import ComfyExtension
 
-# 导入所有迁移后的节点类
 from .nodes_shared import JimengAPIClient
 from .nodes_image import JimengSeedream3, JimengSeedream4
 from .nodes_video import JimengSeedance1, JimengSeedance1_5,JimengReferenceImage2Video, JimengVideoQueryTasks
@@ -86,6 +85,5 @@ class JimengExtension(ComfyExtension):
 async def comfy_entrypoint() -> ComfyExtension:
     return JimengExtension()
 
-# 保留 Web 目录配置,供前端资源加载使用
 WEB_DIRECTORY = "./web"
 __all__ = ["WEB_DIRECTORY"]

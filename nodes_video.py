@@ -228,9 +228,9 @@ class JimengVideoBase:
             msg = get_text("popup_task_pending").format(task_id=task_id, status=status)
         raise RuntimeError(msg)
 
-    def _get_service_options(self, enable_offline, enable_timeout, timeout_seconds):
+    def _get_service_options(self, enable_offline, timeout_seconds):
         service_tier = "flex" if enable_offline else "default"
-        execution_expires_after = timeout_seconds if enable_timeout else None
+        execution_expires_after = timeout_seconds
         return service_tier, execution_expires_after
 
     def _append_image_content(self, content_list, image, role):
@@ -867,7 +867,6 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Int.Input("generation_count", default=1, min=1),
                 comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
-                comfy_io.Boolean.Input("enable_timeout_setting", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200
                 ),
@@ -899,7 +898,6 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        enable_timeout_setting,
         timeout_seconds,
         enable_offline_inference,
         non_blocking,
@@ -932,7 +930,7 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
             helper._append_image_content(content, last_frame_image, "last_frame")
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, enable_timeout_setting, timeout_seconds
+            enable_offline_inference, timeout_seconds
         )
 
         return await helper._common_generation_logic(
@@ -1015,7 +1013,6 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Int.Input("generation_count", default=1, min=1),
                 comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
-                comfy_io.Boolean.Input("enable_timeout_setting", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200
                 ),
@@ -1049,7 +1046,6 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        enable_timeout_setting,
         timeout_seconds,
         enable_offline_inference,
         non_blocking,
@@ -1075,7 +1071,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             helper._append_image_content(content, last_frame_image, "last_frame")
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, enable_timeout_setting, timeout_seconds
+            enable_offline_inference, timeout_seconds
         )
 
         final_duration = -1.0 if auto_duration else float(duration)
@@ -1150,7 +1146,6 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Int.Input("generation_count", default=1, min=1),
                 comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
-                comfy_io.Boolean.Input("enable_timeout_setting", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200
                 ),
@@ -1182,7 +1177,6 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        enable_timeout_setting,
         timeout_seconds,
         enable_offline_inference,
         non_blocking,
@@ -1205,7 +1199,7 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
             raise ValueError(get_text("popup_ref_missing"))
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, enable_timeout_setting, timeout_seconds
+            enable_offline_inference, timeout_seconds
         )
 
         return await helper._common_generation_logic(
@@ -1261,6 +1255,7 @@ class JimengVideoQueryTasks(comfy_io.ComfyNode):
                 comfy_io.Combo.Input(
                     "model_version", options=cls.MODELS, default="all"
                 ),
+                comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
             ],
             outputs=[
                 comfy_io.String.Output(display_name="task_list_json"),
@@ -1278,6 +1273,7 @@ class JimengVideoQueryTasks(comfy_io.ComfyNode):
         service_tier,
         task_ids,
         model_version,
+        seed,
     ) -> comfy_io.NodeOutput:
         ark_client = client.ark
         base_kwargs = {"page_num": page_num, "page_size": page_size}
