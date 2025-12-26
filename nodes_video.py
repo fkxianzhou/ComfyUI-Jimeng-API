@@ -340,7 +340,6 @@ class JimengVideoBase:
         poll_interval=2,
         service_tier="default",
         execution_expires_after=None,
-        is_auto_duration=False,
     ):
         ark_client = client.ark
         ps_instance = PromptServer.instance
@@ -515,7 +514,6 @@ class JimengVideoBase:
         failed_tasks_info = []
         tasks_to_poll_ids = [t.id for t in tasks_to_poll]
         total_tasks_count = len(tasks_to_poll_ids)
-        duration_updated = False
 
         try:
             while tasks_to_poll_ids:
@@ -545,24 +543,6 @@ class JimengVideoBase:
                         current_queued_count += 1
                         single_task_status_for_display = "unknown"
                     else:
-                        if is_auto_duration and not duration_updated:
-                            remote_dur = getattr(res, "duration", 0)
-                            if remote_dur and remote_dur > 0:
-                                new_est_time, new_method_key = (
-                                    await _get_api_estimated_time_async(
-                                        ark_client, model_name, remote_dur, resolution
-                                    )
-                                )
-                                if new_est_time > 0:
-                                    estimated_single_task_time = new_est_time
-                                    log_msg(
-                                        "task_submitted_est",
-                                        time=estimated_single_task_time,
-                                        method=get_text(new_method_key)
-                                        + " (Auto-Update)",
-                                    )
-                                    duration_updated = True
-
                         if res.status == "succeeded":
                             successful_tasks.append(res)
                             if current_task_id in running_task_start_times:
@@ -814,6 +794,10 @@ class JimengVideoBase:
             (duration_or_frames_arg, estimation_duration) = (
                 _calculate_duration_and_frames_args(duration)
             )
+
+            if is_auto_duration:
+                estimation_duration = 5
+
             prompt_string = f"{prompt} --resolution {resolution} --ratio {aspect_ratio} {duration_or_frames_arg} --seed {api_seed} {prompt_extra_args.strip()}"
             content.insert(0, {"type": "text", "text": prompt_string})
             comfy.model_management.throw_exception_if_processing_interrupted()
@@ -831,7 +815,6 @@ class JimengVideoBase:
                 node_id=node_id,
                 service_tier=service_tier,
                 execution_expires_after=execution_expires_after,
-                is_auto_duration=is_auto_duration,
             )
         except Exception as e:
             if isinstance(e, comfy.model_management.InterruptProcessingException):
