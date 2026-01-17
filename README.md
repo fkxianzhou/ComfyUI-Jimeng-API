@@ -16,20 +16,13 @@
 
 ## 📦 安装
 
-1.  **克隆仓库**:
+方式1：  **克隆仓库**:
     打开终端，`cd` 到 ComfyUI 的 `custom_nodes` 目录，运行：
     ```bash
-    git clone [https://github.com/Jimeng-AI/ComfyUI-Jimeng-API.git](https://github.com/Jimeng-AI/ComfyUI-Jimeng-API.git)
+    git clone https://github.com/fkxianzhou/ComfyUI-Jimeng-API
     ```
 
-2.  **安装依赖**:
-    进入目录并安装所需的 Python 包：
-    ```bash
-    cd ComfyUI-Jimeng-API
-    pip install -r requirements.txt
-    ```
-
-3.  **重启 ComfyUI**。
+方式2： **使用ComfyUI Manager下载**。
 
 ## ⚙️ 设置：配置 API 密钥
 
@@ -94,5 +87,6 @@
 ![Seedance Workflow](example_workflows/Seedance.png)
 
 ## 📓 示例工作流
+
 
 您可以在 `example_workflows` 目录中找到所有节点的示例工作流。
