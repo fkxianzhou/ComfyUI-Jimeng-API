@@ -268,11 +268,18 @@ class JimengVideoBase:
             v_coro = download_video_to_temp(
                 session, video_url, video_prefix, seed, temp_save_path
             )
-            f_coro = download_image_to_temp(
-                session, last_frame_url, frame_prefix, seed, temp_save_path
-            )
+            
+            f_coro = None
+            if last_frame_url:
+                f_coro = download_image_to_temp(
+                    session, last_frame_url, frame_prefix, seed, temp_save_path
+                )
 
-            v_path, (f_tensor, f_path) = await asyncio.gather(v_coro, f_coro)
+            if f_coro:
+                v_path, (f_tensor, f_path) = await asyncio.gather(v_coro, f_coro)
+            else:
+                v_path = await v_coro
+                f_tensor, f_path = None, None
 
             resp = task.model_dump()
             for k in ["created_at", "updated_at"]:
@@ -306,6 +313,25 @@ class JimengVideoBase:
         first_frame = None
 
         for res in valid_results:
+            # Fallback: Extract last frame from video if API didn't return it (e.g. Draft mode)
+            if res["frame_tensor"] is None and res["video_path"]:
+                try:
+                    import cv2
+                    cap = cv2.VideoCapture(res["video_path"])
+                    if cap.isOpened():
+                        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                        if frame_count > 0:
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_count - 1)
+                            ret, frame = cap.read()
+                            if ret:
+                                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                                image = frame.astype(numpy.float32) / 255.0
+                                res["frame_tensor"] = torch.from_numpy(image)[None,]
+                    cap.release()
+                except Exception as e:
+                    # Just log warning, don't fail the whole process
+                    print(f"[JimengAI] Warning: Failed to extract last frame locally: {e}")
+
             all_responses.append(res["response"])
             v_path = res["video_path"]
             f_tensor = res["frame_tensor"]
@@ -318,7 +344,7 @@ class JimengVideoBase:
 
             if generation_count > 1:
                 save_to_output(v_path, filename_prefix)
-                if save_last_frame_batch:
+                if save_last_frame_batch and f_path:
                     save_to_output(f_path, filename_prefix)
 
         return comfy_io.NodeOutput(
@@ -340,6 +366,8 @@ class JimengVideoBase:
         poll_interval=2,
         service_tier="default",
         execution_expires_after=None,
+        extra_api_params=None,
+        return_last_frame=True,
     ):
         ark_client = client.ark
         ps_instance = PromptServer.instance
@@ -430,12 +458,15 @@ class JimengVideoBase:
         request_kwargs = {
             "model": model_name,
             "content": content,
-            "return_last_frame": True,
+            "return_last_frame": return_last_frame,
         }
         if service_tier:
             request_kwargs["service_tier"] = service_tier
         if execution_expires_after is not None:
             request_kwargs["execution_expires_after"] = execution_expires_after
+        
+        if extra_api_params:
+            request_kwargs.update(extra_api_params)
 
         create_coroutines = []
         for _ in range(generation_count):
@@ -783,6 +814,8 @@ class JimengVideoBase:
         execution_expires_after=None,
         enable_random_seed=False,
         is_auto_duration=False,
+        extra_api_params=None,
+        return_last_frame=True,
     ):
         try:
             _raise_if_text_params(prompt, forbidden_params)
@@ -815,6 +848,8 @@ class JimengVideoBase:
                 node_id=node_id,
                 service_tier=service_tier,
                 execution_expires_after=execution_expires_after,
+                extra_api_params=extra_api_params,
+                return_last_frame=return_last_frame,
             )
         except Exception as e:
             if isinstance(e, comfy.model_management.InterruptProcessingException):
@@ -998,7 +1033,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                     display_mode=comfy_io.NumberDisplay.number,
                 ),
                 comfy_io.Combo.Input(
-                    "resolution", options=["480p", "720p"], default="720p"
+                    "resolution", options=["480p", "720p", "1080p"], default="720p"
                 ),
                 comfy_io.Combo.Input(
                     "aspect_ratio", options=cls.ASPECT_RATIOS, default="adaptive"
@@ -1010,6 +1045,8 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                     tooltip="On=Enabled, Off=Disabled",
                 ),
                 comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
+                comfy_io.Boolean.Input("draft_mode", default=False),
+                comfy_io.String.Input("draft_task_id", default=""),
                 comfy_io.Int.Input("generation_count", default=1, min=1),
                 comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
@@ -1049,6 +1086,8 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         timeout_seconds,
         enable_offline_inference,
         non_blocking,
+        draft_mode,
+        draft_task_id,
         image=None,
         last_frame_image=None,
     ) -> comfy_io.NodeOutput:
@@ -1062,6 +1101,41 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         helper = JimengVideoBase()
         helper.NON_BLOCKING_TASK_CACHE = cls.NON_BLOCKING_TASK_CACHE
 
+        service_tier, execution_expires_after = helper._get_service_options(
+            enable_offline_inference, timeout_seconds
+        )
+        
+        if draft_task_id and draft_task_id.strip():
+            content = [
+                {
+                    "type": "draft_task", 
+                    "draft_task": {"id": draft_task_id.strip()}
+                }
+            ]
+            
+            extra_params = {
+                "resolution": resolution,
+            }
+
+            estimation_duration = 5 if auto_duration else float(duration)
+            
+            return await helper._execute_batch_generation(
+                client=client,
+                model_name=final_model_name,
+                content=content,
+                estimation_duration=estimation_duration,
+                resolution=resolution,
+                generation_count=generation_count,
+                filename_prefix=filename_prefix,
+                save_last_frame_batch=save_last_frame_batch,
+                non_blocking=non_blocking,
+                node_id=node_id,
+                service_tier=service_tier,
+                execution_expires_after=execution_expires_after,
+                extra_api_params=extra_params,
+                return_last_frame=True
+            )
+
         content = []
         helper._append_image_content(content, image, "first_frame")
 
@@ -1070,11 +1144,17 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                 raise ValueError(get_text("popup_first_frame_missing"))
             helper._append_image_content(content, last_frame_image, "last_frame")
 
-        service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, timeout_seconds
-        )
-
         final_duration = -1.0 if auto_duration else float(duration)
+        
+        extra_api_params = {}
+        should_return_last_frame = True
+        final_resolution = resolution
+        
+        if draft_mode:
+            extra_api_params["draft"] = True
+            final_resolution = "480p"
+            should_return_last_frame = False
+            service_tier = "default"
 
         extra_args = f"--camerafixed {'true' if camerafixed else 'false'}"
         extra_args += f" --generate_audio {'true' if generate_audio else 'false'}"
@@ -1083,12 +1163,12 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             client,
             prompt,
             final_duration,
-            resolution,
+            final_resolution,
             aspect_ratio,
             seed,
             generation_count,
             filename_prefix,
-            save_last_frame_batch,
+            save_last_frame_batch if not draft_mode else False,
             non_blocking,
             node_id,
             model_name=final_model_name,
@@ -1107,6 +1187,8 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             execution_expires_after=execution_expires_after,
             enable_random_seed=enable_random_seed,
             is_auto_duration=auto_duration,
+            extra_api_params=extra_api_params,
+            return_last_frame=should_return_last_frame,
         )
 
 

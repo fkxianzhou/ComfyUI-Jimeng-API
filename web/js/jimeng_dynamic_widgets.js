@@ -7,7 +7,8 @@ const TARGET_WIDGETS = [
     'generation_count', 
     'enable_timeout_setting', 
     'enable_random_seed', 
-    'auto_duration'
+    'auto_duration',
+    'draft_mode'
 ];
 
 /**
@@ -123,11 +124,20 @@ function widgetLogic(node, widget) {
         node.comfyClass === "JimengReferenceImage2Video" || 
         node.comfyClass === "JimengSeedance1_5") {
 
-        // 1.5版本特定逻辑：智能时长控制
-        if (widget.name === 'auto_duration') {
-            const isAuto = widget.value === true;
-            const durationWidget = findWidgetByName(node, 'duration');
-            if (toggleWidget(node, durationWidget, !isAuto)) shouldResize = true;
+        // 1.5版本特定逻辑：智能时长控制 & 样片模式联动
+        if (node.comfyClass === "JimengSeedance1_5") {
+            if (widget.name === 'auto_duration') {
+                const isAuto = widget.value === true;
+                const durationWidget = findWidgetByName(node, 'duration');
+                if (toggleWidget(node, durationWidget, !isAuto)) shouldResize = true;
+            }
+
+            if (widget.name === 'draft_mode') {
+                const isDraftMode = widget.value === true;
+                const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
+                // 当开启样片模式时，显示 draft_task_id 输入框
+                if (toggleWidget(node, draftTaskWidget, isDraftMode)) shouldResize = true;
+            }
         }
 
         // 通用逻辑：批量生成选项联动

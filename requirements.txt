@@ -1,1 +1,1 @@
-volcengine-python-sdk[ark]>=4.0.43
+volcengine-python-sdk[ark]>=5.0.6

@@ -31,8 +31,8 @@ def get_init_text(key, **kwargs):
 
 def check_and_update_dependencies():
     package_name = "volcengine-python-sdk"
-    install_spec = "volcengine-python-sdk[ark]>=4.0.43"
-    min_version = "4.0.43"
+    install_spec = "volcengine-python-sdk[ark]>=5.0.6"
+    min_version = "5.0.6"
 
     try:
         current_version = importlib.metadata.version(package_name)
