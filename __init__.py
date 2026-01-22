@@ -2,9 +2,30 @@ import sys
 import subprocess
 import importlib.metadata
 import locale
+import asyncio
 from .constants import LOG_TRANSLATIONS
 
-# V3 API 引入
+if sys.platform == 'win32':
+    try:
+        from asyncio import proactor_events
+        
+        _original_call_connection_lost = proactor_events._ProactorBasePipeTransport._call_connection_lost
+        
+        def _silenced_call_connection_lost(self, exc):
+            try:
+                _original_call_connection_lost(self, exc)
+            except ConnectionResetError:
+                pass
+            except OSError as e:
+                if getattr(e, 'winerror', None) == 10054:
+                    pass
+                else:
+                    raise
+
+        proactor_events._ProactorBasePipeTransport._call_connection_lost = _silenced_call_connection_lost
+    except ImportError:
+        pass
+
 from comfy_api.latest import ComfyExtension
 
 from .nodes_shared import JimengAPIClient
@@ -66,10 +87,8 @@ def check_and_update_dependencies():
     except Exception as e:
         print(get_init_text("init_dep_check_err", e=e))
 
-# 执行依赖检查
 check_and_update_dependencies()
 
-# V3 扩展注册
 class JimengExtension(ComfyExtension):
     async def get_node_list(self) -> list[type]:
         return [
