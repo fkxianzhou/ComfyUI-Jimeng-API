@@ -287,7 +287,7 @@
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
       "timeout_seconds": {
-        "name": "任务超时阈值",
+        "name": "任务超时阈值（秒）",
         "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {
@@ -301,6 +301,10 @@
       "draft_mode": {
         "name": "启用 Draft 样片模式",
         "tooltip": "启用后将生成低成本的 480p 预览视频，用于快速验证生成视频是否符合预期。此模式不支持离线推理功能。"
+      },
+      "reuse_last_draft_task": {
+        "name": "复用上次样片任务 ID",
+        "tooltip": "启用后，将自动填入上一次生成的样片任务 ID (需手动关闭此功能才能发起新的样片任务)。"
       },
       "draft_task_id": {
         "name": "样片任务 ID",

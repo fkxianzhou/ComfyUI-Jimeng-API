@@ -62,6 +62,8 @@ RECENT_TASK_COUNT = 5
 RECENT_SPIKE_FACTOR = 1.1
 
 NON_BLOCKING_TASK_CACHE = {}
+LAST_SEEDANCE_1_5_DRAFT_TASK_ID = {}
+
 
 
 async def _get_api_estimated_time_async(
@@ -313,7 +315,6 @@ class JimengVideoBase:
         first_frame = None
 
         for res in valid_results:
-            # Fallback: Extract last frame from video if API didn't return it (e.g. Draft mode)
             if res["frame_tensor"] is None and res["video_path"]:
                 try:
                     import cv2
@@ -329,7 +330,6 @@ class JimengVideoBase:
                                 res["frame_tensor"] = torch.from_numpy(image)[None,]
                     cap.release()
                 except Exception as e:
-                    # Just log warning, don't fail the whole process
                     print(f"[JimengAI] Warning: Failed to extract last frame locally: {e}")
 
             all_responses.append(res["response"])
@@ -368,6 +368,7 @@ class JimengVideoBase:
         execution_expires_after=None,
         extra_api_params=None,
         return_last_frame=True,
+        on_tasks_created=None,
     ):
         ark_client = client.ark
         ps_instance = PromptServer.instance
@@ -468,11 +469,17 @@ class JimengVideoBase:
         if extra_api_params:
             request_kwargs.update(extra_api_params)
 
+        is_multi_content = isinstance(content, list) and len(content) > 0 and isinstance(content[0], list)
+
         create_coroutines = []
-        for _ in range(generation_count):
+        for i in range(generation_count):
+            task_kwargs = request_kwargs.copy()
+            if is_multi_content:
+                task_kwargs["content"] = content[i % len(content)]
+            
             create_coroutines.append(
                 asyncio.to_thread(
-                    ark_client.content_generation.tasks.create, **request_kwargs
+                    ark_client.content_generation.tasks.create, **task_kwargs
                 )
             )
 
@@ -516,6 +523,12 @@ class JimengVideoBase:
             if creation_errors:
                 final_error_msg = format_api_error(creation_errors[0])
             self._create_failure_json(final_error_msg)
+
+        if on_tasks_created:
+            try:
+                on_tasks_created(tasks_to_poll)
+            except Exception as e:
+                print(f"[JimengAI] Warning: on_tasks_created callback failed: {e}")
 
         if non_blocking:
             task_ids = [t.id for t in tasks_to_poll]
@@ -816,6 +829,7 @@ class JimengVideoBase:
         is_auto_duration=False,
         extra_api_params=None,
         return_last_frame=True,
+        on_tasks_created=None,
     ):
         try:
             _raise_if_text_params(prompt, forbidden_params)
@@ -850,6 +864,7 @@ class JimengVideoBase:
                 execution_expires_after=execution_expires_after,
                 extra_api_params=extra_api_params,
                 return_last_frame=return_last_frame,
+                on_tasks_created=on_tasks_created,
             )
         except Exception as e:
             if isinstance(e, comfy.model_management.InterruptProcessingException):
@@ -900,7 +915,7 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
                 ),
                 comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
                 comfy_io.Int.Input("generation_count", default=1, min=1),
-                comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
+                comfy_io.String.Input("filename_prefix", default="Jimeng/Video/Batch/Seedance"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200
@@ -1046,9 +1061,14 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                 ),
                 comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
                 comfy_io.Boolean.Input("draft_mode", default=False),
+                comfy_io.Boolean.Input(
+                    "reuse_last_draft_task",
+                    default=False,
+                    tooltip="Reuse the last task ID generated in Draft mode",
+                ),
                 comfy_io.String.Input("draft_task_id", default=""),
                 comfy_io.Int.Input("generation_count", default=1, min=1),
-                comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
+                comfy_io.String.Input("filename_prefix", default="Jimeng/Video/Batch/Seedance"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200
@@ -1087,12 +1107,59 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         enable_offline_inference,
         non_blocking,
         draft_mode,
+        reuse_last_draft_task,
         draft_task_id,
         image=None,
         last_frame_image=None,
     ) -> comfy_io.NodeOutput:
 
         node_id = cls.hidden.unique_id
+
+        global LAST_SEEDANCE_1_5_DRAFT_TASK_ID
+
+        content_for_reuse = None
+
+        if draft_task_id and draft_task_id.strip():
+            content_for_reuse = [
+                {
+                    "type": "draft_task", 
+                    "draft_task": {"id": draft_task_id.strip()}
+                }
+            ]
+        
+        elif reuse_last_draft_task:
+            cached = LAST_SEEDANCE_1_5_DRAFT_TASK_ID.get(node_id)
+            if cached:
+                if generation_count == 1:
+                    tid = None
+                    if isinstance(cached, list) and len(cached) > 0:
+                        tid = cached[0]
+                    elif isinstance(cached, str):
+                        tid = cached
+                    
+                    if tid:
+                        content_for_reuse = [
+                            {
+                                "type": "draft_task", 
+                                "draft_task": {"id": tid}
+                            }
+                        ]
+                else:
+                    ids_to_use = []
+                    if isinstance(cached, list):
+                        ids_to_use = cached
+                    elif isinstance(cached, str):
+                        ids_to_use = [cached]
+                    
+                    if ids_to_use:
+                        content_for_reuse = []
+                        for tid in ids_to_use:
+                            content_for_reuse.append([
+                                {
+                                    "type": "draft_task", 
+                                    "draft_task": {"id": tid}
+                                }
+                            ])
 
         final_model_name = VIDEO_MODEL_MAP.get(model_version)
         if not final_model_name:
@@ -1105,14 +1172,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             enable_offline_inference, timeout_seconds
         )
         
-        if draft_task_id and draft_task_id.strip():
-            content = [
-                {
-                    "type": "draft_task", 
-                    "draft_task": {"id": draft_task_id.strip()}
-                }
-            ]
-            
+        if content_for_reuse:
             extra_params = {
                 "resolution": resolution,
             }
@@ -1122,7 +1182,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             return await helper._execute_batch_generation(
                 client=client,
                 model_name=final_model_name,
-                content=content,
+                content=content_for_reuse,
                 estimation_duration=estimation_duration,
                 resolution=resolution,
                 generation_count=generation_count,
@@ -1159,7 +1219,19 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         extra_args = f"--camerafixed {'true' if camerafixed else 'false'}"
         extra_args += f" --generate_audio {'true' if generate_audio else 'false'}"
 
-        return await helper._common_generation_logic(
+        def _on_tasks_created(tasks):
+            if draft_mode:
+                try:
+                    global LAST_SEEDANCE_1_5_DRAFT_TASK_ID
+                    if tasks and len(tasks) > 0:
+                        if generation_count == 1:
+                            LAST_SEEDANCE_1_5_DRAFT_TASK_ID[node_id] = tasks[0].id
+                        else:
+                            LAST_SEEDANCE_1_5_DRAFT_TASK_ID[node_id] = [t.id for t in tasks]
+                except Exception as e:
+                    print(f"[JimengAI] Failed to record draft task ID: {e}")
+
+        result = await helper._common_generation_logic(
             client,
             prompt,
             final_duration,
@@ -1189,7 +1261,10 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             is_auto_duration=auto_duration,
             extra_api_params=extra_api_params,
             return_last_frame=should_return_last_frame,
+            on_tasks_created=_on_tasks_created,
         )
+
+        return result
 
 
 class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
@@ -1226,7 +1301,7 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
                 ),
                 comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
                 comfy_io.Int.Input("generation_count", default=1, min=1),
-                comfy_io.String.Input("filename_prefix", default="Jimeng/Video"),
+                comfy_io.String.Input("filename_prefix", default="Jimeng/Video/Batch/Seedance"),
                 comfy_io.Boolean.Input("save_last_frame_batch", default=False),
                 comfy_io.Int.Input(
                     "timeout_seconds", default=172800, min=3600, max=259200

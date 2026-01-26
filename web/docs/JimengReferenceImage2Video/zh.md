@@ -1,14 +1,21 @@
-# 参考图生视频（Seedance 1.0 lite）
+### Jimeng Reference to Video
+参考图生视频节点 (Seedance 1.0 lite)。
 
-根据输入的提示词和 1 至 4 张参考图像来生成视频。
+*   **Node ID**: `JimengReferenceImage2Video`
+*   **Python Class**: `JimengReferenceImage2Video`
 
-## 输入 (Inputs)
+#### 输入 (Inputs)
 
-- **参考图 1-4**: 至少需连接一张参考图。
-- **非阻塞模式**: 开启后可在后台等待视频生成。
-- **分辨率**: 支持 480p 和 720p。
+| 参数名 | 类型 | 必填 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- | :--- |
+| `client` | `JIMENG_CLIENT` | 是 | - | API 客户端。 |
+| `prompt` | `STRING` | 是 | "" | 提示词。 |
+| `ref_image_1` | `IMAGE` | 否 | - | 参考图像 1 (至少需要一张参考图)。 |
+| `ref_image_2` | `IMAGE` | 否 | - | 参考图像 2。 |
+| `ref_image_3` | `IMAGE` | 否 | - | 参考图像 3。 |
+| `ref_image_4` | `IMAGE` | 否 | - | 参考图像 4。 |
+| ... | ... | ... | ... | 其他通用视频参数 (duration, resolution, seed 等)。 |
 
-## 输出 (Outputs)
+#### 输出 (Outputs)
 
-- **视频**: 生成的结果。
-- **响应**: 包含任务 ID 等信息的原始响应。
+同 Seedance 1.0。

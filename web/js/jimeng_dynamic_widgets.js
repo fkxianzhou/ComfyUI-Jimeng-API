@@ -8,7 +8,8 @@ const TARGET_WIDGETS = [
     'enable_timeout_setting', 
     'enable_random_seed', 
     'auto_duration',
-    'draft_mode'
+    'draft_mode',
+    'reuse_last_draft_task'
 ];
 
 /**
@@ -135,8 +136,33 @@ function widgetLogic(node, widget) {
             if (widget.name === 'draft_mode') {
                 const isDraftMode = widget.value === true;
                 const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
-                // 当开启样片模式时，显示 draft_task_id 输入框
-                if (toggleWidget(node, draftTaskWidget, isDraftMode)) shouldResize = true;
+                const reuseWidget = findWidgetByName(node, 'reuse_last_draft_task');
+                
+                
+                if (toggleWidget(node, reuseWidget, isDraftMode)) shouldResize = true;
+                
+                if (isDraftMode) {
+                    if (reuseWidget) {
+                         widgetLogic(node, reuseWidget);
+                    } else {
+                        if (toggleWidget(node, draftTaskWidget, true)) shouldResize = true;
+                    }
+                } else {
+                    if (toggleWidget(node, draftTaskWidget, false)) shouldResize = true;
+                }
+            }
+
+            if (widget.name === 'reuse_last_draft_task') {
+                const isReuse = widget.value === true;
+                const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
+                const draftModeWidget = findWidgetByName(node, 'draft_mode');
+                const isDraftMode = draftModeWidget ? draftModeWidget.value === true : false;
+                
+                if (isDraftMode) {
+                    if (toggleWidget(node, draftTaskWidget, !isReuse)) shouldResize = true;
+                } else {
+                     if (toggleWidget(node, draftTaskWidget, false)) shouldResize = true;
+                }
             }
         }
 

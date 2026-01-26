@@ -1,18 +1,27 @@
-# 图像生成（Seedream 3）
+### Jimeng Seedream 3
+基于 Seedream 3 模型进行图像生成 (Text-to-Image / Image-to-Image)。
 
-使用 Seedream 3 模型进行文本到图像或图像到图像的生成。
+*   **Node ID**: `JimengSeedream3`
+*   **Python Class**: `JimengSeedream3`
 
-## 输入 (Inputs)
+#### 输入 (Inputs)
 
-- **客户端**: 火山方舟 API 客户端。
-- **提示词**: 用于生成的文本描述。
-- **尺寸**: 预设尺寸或选择 'Custom' 使用自定义宽高。
-- **种子**: 随机种子，-1 表示随机。
-- **引导系数**: 提示词的引导强度。
-- **生成数量**: 一次生成的并发图像数。
-- **输入图像**: (可选) 用于图生图（Seededit 3）的参考图。
+| 参数名 | 类型 | 必填 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- | :--- |
+| `client` | `JIMENG_CLIENT` | 是 | - | 连接 `Jimeng API Client` 的输出。 |
+| `prompt` | `STRING` | 是 | "" | 图像生成的提示词 (支持多行)。 |
+| `size` | `COMBO` | 是 | - | 预设的图像尺寸比例 (如 "1024x1024 (1:1)")。若选择 "Custom"，则使用 `width` 和 `height`。 |
+| `width` | `INT` | 是 | 1024 | 自定义宽度 (仅当 `size` 为 "Custom" 时生效)，范围 1-8192。 |
+| `height` | `INT` | 是 | 1024 | 自定义高度 (仅当 `size` 为 "Custom" 时生效)，范围 1-8192。 |
+| `seed` | `INT` | 是 | 0 | 随机种子。-1 表示随机。 |
+| `guidance_scale` | `FLOAT` | 是 | 5.0 | 提示词跟随度 (CFG Scale)，范围 1.0-10.0。 |
+| `generation_count` | `INT` | 是 | 1 | 批量生成的数量 (1-2048)。 |
+| `watermark` | `BOOLEAN` | 是 | False | 是否添加水印。 |
+| `image` | `IMAGE` | 否 | - | (可选) 输入图像，用于图生图模式。 |
 
-## 输出 (Outputs)
+#### 输出 (Outputs)
 
-- **图像**: 生成的结果。
-- **响应**: API 的完整 JSON 响应。
+| 输出名 | 类型 | 描述 |
+| :--- | :--- | :--- |
+| `image` | `IMAGE` | 生成的图像 (Batch)。 |
+| `response` | `STRING` | API 响应的原始 JSON 数据。 |

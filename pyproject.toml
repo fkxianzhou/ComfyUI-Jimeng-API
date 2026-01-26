@@ -1,7 +1,7 @@
 [project]
 name = "ComfyUI-Jimeng-API"
 description = "在 ComfyUI 中使用火山方舟API提供的即梦（豆包）Seedream 和 Seedance 模型。 / Using the Volcano Ark API to utilize the Seedream and Seedance models of Jimeng (Doubao) in ComfyUI."
-version = "2.1.1"
+version = "2.1.2"
 license = {file = "LICENSE"}
 dependencies = ["volcengine-python-sdk[ark]>=5.0.6"]
 

@@ -1,15 +1,24 @@
-# 视频生成任务列表查询
+### Jimeng Video Query Tasks
+查询历史视频生成任务的状态和结果。
 
-查询符合条件的 API 视频生成任务记录。
+*   **Node ID**: `JimengVideoQueryTasks`
+*   **Python Class**: `JimengVideoQueryTasks`
 
-## 输入 (Inputs)
+#### 输入 (Inputs)
 
-- **页码 / 每页数量**: 控制翻页。
-- **任务状态**: 按成功、失败、排队中、运行中等状态过滤。
-- **任务 ID**: 查询特定任务的详情（支持多行输入）。
-- **模型选择**: 按模型型号进行过滤。
+| 参数名 | 类型 | 必填 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- | :--- |
+| `client` | `JIMENG_CLIENT` | 是 | - | API 客户端。 |
+| `page_num` | `INT` | 是 | 1 | 页码。 |
+| `page_size` | `INT` | 是 | 10 | 每页数量。 |
+| `status` | `COMBO` | 是 | "all" | 过滤任务状态 (succeeded, failed, running 等)。 |
+| `service_tier` | `COMBO` | 是 | "default" | 服务等级 (default/flex)。 |
+| `task_ids` | `STRING` | 否 | "" | 指定任务 ID 列表 (每行一个)。 |
+| `model_version` | `COMBO` | 是 | "all" | 过滤模型版本。 |
 
-## 输出 (Outputs)
+#### 输出 (Outputs)
 
-- **查询结果**: JSON 格式的任务列表。
-- **任务数量**: 符合过滤条件的总数。
+| 输出名 | 类型 | 描述 |
+| :--- | :--- | :--- |
+| `task_list_json` | `STRING` | 任务列表的 JSON 字符串。 |
+| `total_tasks` | `INT` | 符合查询条件的任务总数。 |
