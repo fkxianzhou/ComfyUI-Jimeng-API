@@ -191,7 +191,7 @@
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
       "timeout_seconds": {
-        "name": "任务超时阈值",
+        "name": "任务超时阈值（秒）",
         "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {
@@ -379,7 +379,7 @@
         "tooltip": "生成数量大于1时，是否同时保存所有视频的最后一帧。"
       },
       "timeout_seconds": {
-        "name": "任务超时阈值",
+        "name": "任务超时阈值（秒）",
         "tooltip": "任务提交后的过期时间（秒），默认 172800 秒（48小时）"
       },
       "enable_offline_inference": {

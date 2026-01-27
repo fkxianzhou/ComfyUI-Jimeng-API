@@ -3,7 +3,7 @@ import subprocess
 import importlib.metadata
 import locale
 import asyncio
-from .constants import LOG_TRANSLATIONS
+from .nodes.constants import LOG_TRANSLATIONS
 
 if sys.platform == 'win32':
     try:
@@ -28,9 +28,9 @@ if sys.platform == 'win32':
 
 from comfy_api.latest import ComfyExtension
 
-from .nodes_shared import JimengAPIClient
-from .nodes_image import JimengSeedream3, JimengSeedream4
-from .nodes_video import JimengSeedance1, JimengSeedance1_5,JimengReferenceImage2Video, JimengVideoQueryTasks
+from .nodes.nodes_shared import JimengAPIClient
+from .nodes.nodes_image import JimengSeedream3, JimengSeedream4
+from .nodes.nodes_video import JimengSeedance1, JimengSeedance1_5,JimengReferenceImage2Video, JimengVideoQueryTasks
 
 def get_init_text(key, **kwargs):
     lang_code = "en"

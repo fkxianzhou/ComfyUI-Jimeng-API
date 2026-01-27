@@ -16,7 +16,7 @@ from .constants import LOG_TRANSLATIONS, ERROR_TEXT_MATCH_RULES
 
 GLOBAL_CATEGORY = "JimengAI"
 
-jimeng_api_dir = os.path.dirname(os.path.abspath(__file__))
+jimeng_api_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API_KEYS_FILE = os.path.join(jimeng_api_dir, "api_keys.json")
 
 API_KEYS_CONFIG = []
