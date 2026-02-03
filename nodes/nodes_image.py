@@ -17,6 +17,7 @@ from .nodes_shared import (
     log_msg,
     format_api_error,
     JimengClientType,
+    JimengException,
 )
 from .utils_download import download_url_to_image_tensor_async
 
@@ -24,148 +25,73 @@ from .models_config import (
     SEEDREAM_4_MODEL_MAP,
     SEEDREAM_3_MODELS,
 )
+from .constants import (
+    MAX_SEED,
+    MIN_SEED,
+    MAX_GENERATION_COUNT,
+    MIN_IMAGE_PIXELS_DEFAULT,
+    MAX_IMAGE_PIXELS_DEFAULT,
+    MIN_IMAGE_PIXELS_V4_5,
+    MAX_IMAGE_PIXELS_V4,
+    MIN_ASPECT_RATIO,
+    MAX_ASPECT_RATIO,
+)
+from .nodes_image_schema import (
+    RECOMMENDED_SIZES_V3,
+    RECOMMENDED_SIZES_V4,
+    get_image_size_inputs,
+    get_common_generation_inputs,
+)
 
 
-class JimengSeedream3(comfy_io.ComfyNode):
-    RECOMMENDED_SIZES = [
-        "Custom",
-        "1024x1024 (1:1)",
-        "864x1152 (3:4)",
-        "1152x864 (4:3)",
-        "1280x720 (16:9)",
-        "720x1280 (9:16)",
-        "832x1248 (2:3)",
-        "1248x832 (3:2)",
-        "1512x648 (21:9)",
-    ]
-
-    @classmethod
-    def define_schema(cls) -> comfy_io.Schema:
-        return comfy_io.Schema(
-            node_id="JimengSeedream3",
-            display_name="Jimeng Seedream 3",
-            category=GLOBAL_CATEGORY,
-            inputs=[
-                JimengClientType.Input("client"),
-                comfy_io.String.Input("prompt", multiline=True, default=""),
-                comfy_io.Combo.Input("size", options=cls.RECOMMENDED_SIZES),
-                comfy_io.Int.Input("width", default=1024, min=1, max=8192),
-                comfy_io.Int.Input("height", default=1024, min=1, max=8192),
-                comfy_io.Int.Input("seed", default=0, min=-1, max=2147483647),
-                comfy_io.Float.Input(
-                    "guidance_scale", default=5.0, min=1.0, max=10.0, step=0.1
-                ),
-                comfy_io.Int.Input("generation_count", default=1, min=1, max=2048),
-                comfy_io.Boolean.Input("watermark", default=False),
-                comfy_io.Image.Input("image", optional=True),
-            ],
-            outputs=[
-                comfy_io.Image.Output(display_name="image"),
-                comfy_io.String.Output(display_name="response"),
-            ],
-        )
-
-    @classmethod
-    async def execute(
-        cls,
-        client,
-        prompt,
-        size,
-        width,
-        height,
-        seed,
-        generation_count,
-        guidance_scale,
-        watermark,
-        image=None,
-    ) -> comfy_io.NodeOutput:
-        ark_client = client.ark
-
-        if size == "Custom":
-            total_pixels = width * height
-            min_pixels = 512 * 512
-            max_pixels = 2048 * 2048
-            if not (min_pixels <= total_pixels <= max_pixels):
-                raise ValueError(
-                    get_text("err_pixels_range").format(
-                        min=min_pixels,
-                        min_desc="512x512",
-                        max=max_pixels,
-                        max_desc="2048x2048",
-                        current=total_pixels,
-                    )
+class JimengImageHelper:
+    """
+    Jimeng 图像生成辅助类。
+    处理尺寸验证、批量生成执行和结果处理。
+    """
+    def validate_custom_size(
+        self, width, height, min_pixels, max_pixels, min_desc, max_desc
+    ):
+        """
+        验证自定义宽高是否符合模型的像素限制和宽高比限制。
+        """
+        total_pixels = width * height
+        if not (min_pixels <= total_pixels <= max_pixels):
+            raise JimengException(
+                get_text("err_pixels_range").format(
+                    min=min_pixels,
+                    min_desc=min_desc,
+                    max=max_pixels,
+                    max_desc=max_desc,
+                    current=total_pixels,
                 )
+            )
 
-            aspect_ratio = width / height
-            if not (1 / 16 <= aspect_ratio <= 16):
-                raise ValueError(
-                    get_text("err_aspect_ratio").format(
-                        min="1/16", max="16", current=aspect_ratio
-                    )
+        aspect_ratio = width / height
+        if not (MIN_ASPECT_RATIO <= aspect_ratio <= MAX_ASPECT_RATIO):
+            raise JimengException(
+                get_text("err_aspect_ratio").format(
+                    min="1/16", max="16", current=aspect_ratio
                 )
+            )
+        return f"{width}x{height}"
 
-            size_param = f"{width}x{height}"
-        else:
-            size_param = size.split(" ")[0]
-
-        image_param = None
-        if image is None:
-            model_id = SEEDREAM_3_MODELS["t2i"]
-        else:
-            model_id = SEEDREAM_3_MODELS["i2i"]
-            image_param = f"data:image/jpeg;base64,{_image_to_base64(image)}"
-            size_param = "adaptive"
-
-        if generation_count > 1:
-            log_msg("batch_submit_start", count=generation_count, model=model_id)
-
-        async def _generate_single(idx, session):
-            current_seed = random.randint(0, 2147483647) if seed == -1 else seed + idx
-
-            def _call_api():
-                kwargs = {
-                    "model": model_id,
-                    "prompt": prompt,
-                    "size": size_param,
-                    "response_format": "url",
-                    "watermark": watermark,
-                    "seed": current_seed,
-                    "guidance_scale": guidance_scale,
-                }
-                if image_param:
-                    kwargs["image"] = image_param
-
-                return ark_client.images.generate(**kwargs)
-
-            try:
-                comfy.model_management.throw_exception_if_processing_interrupted()
-                resp = await asyncio.to_thread(_call_api)
-                comfy.model_management.throw_exception_if_processing_interrupted()
-
-                image_tensor = await download_url_to_image_tensor_async(
-                    session, resp.data[0].url
-                )
-
-                if image_tensor is None:
-                    raise RuntimeError(get_text("err_download_img"))
-
-                output_response = {
-                    "batch_index": idx,
-                    "model": resp.model,
-                    "created": resp.created,
-                    "url": resp.data[0].url,
-                    "revised_prompt": getattr(resp.data[0], "revised_prompt", None),
-                }
-                return image_tensor, output_response
-            except Exception as e:
-                if isinstance(e, comfy.model_management.InterruptProcessingException):
-                    raise e
-                raise RuntimeError(format_api_error(e))
-
+    async def execute_generation(self, generation_count, generate_single_func):
+        """
+        执行批量生成任务。
+        并发调用 generate_single_func 来生成图片。
+        """
         async with aiohttp.ClientSession() as session:
-            tasks = [_generate_single(i, session) for i in range(generation_count)]
+            tasks = [generate_single_func(i, session) for i in range(generation_count)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        return self.process_batch_results(results, generation_count)
+
+    def process_batch_results(self, results, generation_count):
+        """
+        处理批量生成的结果。
+        收集成功的结果，统计失败原因，并合并输出。
+        """
         valid_tensors = []
         valid_responses = []
         error_counts = {}
@@ -200,10 +126,11 @@ class JimengSeedream3(comfy_io.ComfyNode):
                     log_msg("batch_failed_reason", msg=msg, count=count)
 
         if not valid_tensors:
-            log_msg("err_batch_fail_all")
+            if generation_count > 1:
+                log_msg("err_batch_fail_all")
             if first_exception:
                 raise first_exception
-            raise RuntimeError(get_text("err_batch_fail_all"))
+            raise JimengException(get_text("err_batch_fail_all"))
 
         combined_response = sorted(valid_responses, key=lambda x: x["batch_index"])
         output_tensor = torch.cat(valid_tensors, dim=0)
@@ -213,21 +140,129 @@ class JimengSeedream3(comfy_io.ComfyNode):
         )
 
 
+class JimengSeedream3(comfy_io.ComfyNode):
+    """
+    Jimeng Seedream 3 图像生成节点。
+    支持文生图和图生图。
+    """
+    RECOMMENDED_SIZES = RECOMMENDED_SIZES_V3
+
+    @classmethod
+    def define_schema(cls) -> comfy_io.Schema:
+        return comfy_io.Schema(
+            node_id="JimengSeedream3",
+            display_name="Jimeng Seedream 3",
+            category=GLOBAL_CATEGORY,
+            inputs=[
+                JimengClientType.Input("client"),
+                comfy_io.String.Input("prompt", multiline=True, default=""),
+                comfy_io.Float.Input(
+                    "guidance_scale", default=5.0, min=1.0, max=10.0, step=0.1
+                ),
+            ]
+            + get_image_size_inputs(cls.RECOMMENDED_SIZES)
+            + get_common_generation_inputs()
+            + [
+                comfy_io.Image.Input("image", optional=True),
+            ],
+            outputs=[
+                comfy_io.Image.Output(display_name="image"),
+                comfy_io.String.Output(display_name="response"),
+            ],
+        )
+
+    @classmethod
+    async def execute(
+        cls,
+        client,
+        prompt,
+        size,
+        width,
+        height,
+        seed,
+        generation_count,
+        watermark,
+        guidance_scale,
+        image=None,
+    ) -> comfy_io.NodeOutput:
+        helper = JimengImageHelper()
+        ark_client = client.ark
+
+        if size == "Custom":
+            size_param = helper.validate_custom_size(
+                width,
+                height,
+                MIN_IMAGE_PIXELS_DEFAULT,
+                MAX_IMAGE_PIXELS_DEFAULT,
+                "512x512",
+                "2048x2048",
+            )
+        else:
+            size_param = size.split(" ")[0]
+
+        image_param = None
+        if image is None:
+            model_id = SEEDREAM_3_MODELS["t2i"]
+        else:
+            model_id = SEEDREAM_3_MODELS["i2i"]
+            image_param = f"data:image/jpeg;base64,{_image_to_base64(image)}"
+            size_param = "adaptive"
+
+        if generation_count > 1:
+            log_msg("batch_submit_start", count=generation_count, model=model_id)
+
+        async def _generate_single(idx, session):
+            current_seed = random.randint(0, MAX_SEED) if seed == -1 else seed + idx
+
+            def _call_api():
+                kwargs = {
+                    "model": model_id,
+                    "prompt": prompt,
+                    "size": size_param,
+                    "response_format": "url",
+                    "watermark": watermark,
+                    "seed": current_seed,
+                    "guidance_scale": guidance_scale,
+                }
+                if image_param:
+                    kwargs["image"] = image_param
+
+                return ark_client.images.generate(**kwargs)
+
+            try:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                resp = await asyncio.to_thread(_call_api)
+                comfy.model_management.throw_exception_if_processing_interrupted()
+
+                image_tensor = await download_url_to_image_tensor_async(
+                    session, resp.data[0].url
+                )
+
+                if image_tensor is None:
+                    raise JimengException(get_text("err_download_img"))
+
+                output_response = {
+                    "batch_index": idx,
+                    "model": resp.model,
+                    "created": resp.created,
+                    "url": resp.data[0].url,
+                    "revised_prompt": getattr(resp.data[0], "revised_prompt", None),
+                }
+                return image_tensor, output_response
+            except Exception as e:
+                if isinstance(e, comfy.model_management.InterruptProcessingException):
+                    raise e
+                raise JimengException(format_api_error(e))
+
+        return await helper.execute_generation(generation_count, _generate_single)
+
+
 class JimengSeedream4(comfy_io.ComfyNode):
-    RECOMMENDED_SIZES = [
-        "2K (adaptive)",
-        "4K (adaptive)",
-        "2048x2048 (1:1)",
-        "2304x1728 (4:3)",
-        "1728x2304 (3:4)",
-        "2560x1440 (16:9)",
-        "1440x2560 (9:16)",
-        "2496x1664 (3:2)",
-        "1664x2496 (2:3)",
-        "3024x1296 (21:9)",
-        "4096x4096 (1:1)",
-        "Custom",
-    ]
+    """
+    Jimeng Seedream 4 图像生成节点。
+    支持文生图、组图生成，并使用流式 API 接收结果。
+    """
+    RECOMMENDED_SIZES = RECOMMENDED_SIZES_V4
 
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
@@ -247,12 +282,10 @@ class JimengSeedream4(comfy_io.ComfyNode):
                     tooltip="On=Group, Off=Single",
                 ),
                 comfy_io.Int.Input("max_images", default=1, min=1, max=15),
-                comfy_io.Combo.Input("size", options=cls.RECOMMENDED_SIZES),
-                comfy_io.Int.Input("width", default=2048, min=1, max=8192),
-                comfy_io.Int.Input("height", default=2048, min=1, max=8192),
-                comfy_io.Int.Input("seed", default=0, min=-1, max=2147483647),
-                comfy_io.Int.Input("generation_count", default=1, min=1, max=2048),
-                comfy_io.Boolean.Input("watermark", default=False),
+            ]
+            + get_image_size_inputs(cls.RECOMMENDED_SIZES, default_width=2048, default_height=2048)
+            + get_common_generation_inputs()
+            + [
                 comfy_io.Image.Input("images", optional=True),
             ],
             outputs=[
@@ -277,6 +310,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
         watermark,
         images=None,
     ) -> comfy_io.NodeOutput:
+        helper = JimengImageHelper()
         ark_client = client.ark
 
         model_id = SEEDREAM_4_MODEL_MAP.get(model_version)
@@ -292,44 +326,28 @@ class JimengSeedream4(comfy_io.ComfyNode):
         if sequential_param == "auto":
             total_count = n_input_images + max_images
             if total_count > 15:
-                raise ValueError(
+                raise JimengException(
                     get_text("err_img_limit_group_15").format(
                         n=n_input_images, max=max_images, total=total_count
                     )
                 )
 
         if size == "Custom":
-            total_pixels = width * height
-
             min_pixels = 1280 * 720
             min_desc = "1280x720"
 
             if "4.5" in model_version:
-                min_pixels = 3686400
+                min_pixels = MIN_IMAGE_PIXELS_V4_5
                 min_desc = "2560x1440"
 
-            max_pixels = 4096 * 4096
-
-            if not (min_pixels <= total_pixels <= max_pixels):
-                raise ValueError(
-                    get_text("err_pixels_range").format(
-                        min=min_pixels,
-                        min_desc=min_desc,
-                        max=max_pixels,
-                        max_desc="4096x4096",
-                        current=total_pixels,
-                    )
-                )
-
-            aspect_ratio = width / height
-
-            if not (1 / 16 <= aspect_ratio <= 16):
-                raise ValueError(
-                    get_text("err_aspect_ratio").format(
-                        min="1/16", max="16", current=aspect_ratio
-                    )
-                )
-            size_str = f"{width}x{height}"
+            size_str = helper.validate_custom_size(
+                width,
+                height,
+                min_pixels,
+                MAX_IMAGE_PIXELS_V4,
+                min_desc,
+                "4096x4096",
+            )
         else:
             size_str = size.split(" ")[0]
 
@@ -353,12 +371,15 @@ class JimengSeedream4(comfy_io.ComfyNode):
             log_msg("batch_submit_start", count=generation_count, model=model_id)
 
         async def _generate_single(idx, session):
-            current_seed = random.randint(0, 2147483647) if seed == -1 else seed + idx
+            current_seed = random.randint(0, MAX_SEED) if seed == -1 else seed + idx
 
             queue = asyncio.Queue()
             loop = asyncio.get_running_loop()
 
             def _producer_thread():
+                """
+                在独立线程中处理流式 API 响应，并将事件放入队列。
+                """
                 try:
                     kwargs = {
                         "model": model_id,
@@ -411,7 +432,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
                                 and hasattr(event.error, "code")
                                 and event.error.code == "InternalServiceError"
                             ):
-                                raise RuntimeError(
+                                raise JimengException(
                                     f"Critical API Error: {event.error.message}"
                                 )
 
@@ -453,7 +474,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
                     if item["type"] == "done":
                         break
                     elif item["type"] == "error":
-                        raise RuntimeError(format_api_error(item["error"]))
+                        raise JimengException(format_api_error(item["error"]))
                     elif item["type"] == "log":
                         if enable_group_generation and generation_count == 1:
                             key = item.get("key")
@@ -482,13 +503,13 @@ class JimengSeedream4(comfy_io.ComfyNode):
                         download_tasks.append(task)
 
                 if not download_tasks:
-                    raise RuntimeError(get_text("err_batch_fail_all"))
+                    raise JimengException(get_text("err_batch_fail_all"))
 
                 results = await asyncio.gather(*download_tasks)
                 valid_results = [r for r in results if r[1] is not None]
 
                 if not valid_results:
-                    raise RuntimeError(get_text("err_download_img"))
+                    raise JimengException(get_text("err_download_img"))
 
                 valid_results.sort(key=lambda x: x[0])
 
@@ -502,55 +523,6 @@ class JimengSeedream4(comfy_io.ComfyNode):
             except Exception as e:
                 if isinstance(e, comfy.model_management.InterruptProcessingException):
                     raise e
-                raise RuntimeError(str(e))
+                raise JimengException(str(e))
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [_generate_single(i, session) for i in range(generation_count)]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        valid_tensors = []
-        valid_responses = []
-        error_counts = {}
-        first_exception = None
-
-        for res in results:
-            if isinstance(res, Exception):
-                if isinstance(res, comfy.model_management.InterruptProcessingException):
-                    raise res
-
-                msg = str(res)
-                prefix = "[JimengAI] "
-                if msg.startswith(prefix):
-                    msg = msg[len(prefix) :]
-
-                error_counts[msg] = error_counts.get(msg, 0) + 1
-                if first_exception is None:
-                    first_exception = res
-            else:
-                valid_tensors.append(res[0])
-                valid_responses.append(res[1])
-
-        if generation_count > 1:
-            log_msg(
-                "batch_finished_stats",
-                success=len(valid_tensors),
-                failed=sum(error_counts.values()),
-            )
-            if error_counts:
-                log_msg("batch_failed_summary", count=sum(error_counts.values()))
-                for msg, count in error_counts.items():
-                    log_msg("batch_failed_reason", msg=msg, count=count)
-
-        if not valid_tensors:
-            log_msg("err_batch_fail_all")
-            if first_exception:
-                raise first_exception
-            raise RuntimeError(get_text("err_batch_fail_all"))
-
-        combined_response = sorted(valid_responses, key=lambda x: x["batch_index"])
-        output_tensor = torch.cat(valid_tensors, dim=0)
-
-        return comfy_io.NodeOutput(
-            output_tensor,
-            json.dumps(combined_response, indent=2),
-        )
+        return await helper.execute_generation(generation_count, _generate_single)

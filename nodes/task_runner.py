@@ -5,7 +5,7 @@ import datetime
 import logging
 import comfy.model_management
 from server import PromptServer
-from .nodes_shared import log_msg, format_api_error, get_text
+from .nodes_shared import log_msg, format_api_error, get_text, JimengException
 
 DEFAULT_FALLBACK_PER_SEC = 12
 DEFAULT_FALLBACK_BASE = 20
@@ -18,6 +18,10 @@ RECENT_SPIKE_FACTOR = 1.1
 async def _get_api_estimated_time_async(
     ark_client, model_name: str, duration: int, resolution: str
 ) -> (int, str):
+    """
+    异步获取 API 预估耗时。
+    通过分析历史任务数据，使用均值、线性回归或近期负载调整来估算任务完成时间。
+    """
     fallback_time = (int(duration) * DEFAULT_FALLBACK_PER_SEC) + DEFAULT_FALLBACK_BASE
     try:
         resp = await asyncio.to_thread(
@@ -134,6 +138,10 @@ async def _get_api_estimated_time_async(
         return (fallback_time, "est_fallback")
 
 class JimengBatchTaskRunner:
+    """
+    Jimeng 批量任务运行器。
+    负责批量提交任务、轮询状态、处理进度条、异常处理以及非阻塞执行支持。
+    """
     def __init__(self, client, node_id=None):
         self.client = client
         self.node_id = node_id
@@ -144,27 +152,33 @@ class JimengBatchTaskRunner:
         log_msg("err_task_fail_msg", tid=task_id or "N/A", msg=error_message)
 
     def _create_failure_json(self, error_message, task_id=None):
+        """
+        创建并抛出失败异常信息。
+        """
         clean_msg = error_message
         prefix = "[JimengAI]"
         if clean_msg.strip().startswith(prefix):
             clean_msg = clean_msg.strip()[len(prefix) :].strip()
         if clean_msg.startswith("Error:"):
             clean_msg = clean_msg[6:].strip()
-        print(f"[JimengAI] {clean_msg}")
+        # print(f"[JimengAI] {clean_msg}")
         if task_id:
             display_msg = get_text("popup_task_failed").format(
                 task_id=task_id, msg=clean_msg
             )
         else:
             display_msg = get_text("popup_req_failed").format(msg=clean_msg)
-        raise RuntimeError(display_msg)
+        raise JimengException(display_msg)
 
     def _create_pending_json(self, status, task_id=None, task_count=0):
+        """
+        创建并抛出等待中状态异常，用于非阻塞模式下的 UI 提示。
+        """
         if task_count > 0:
             msg = get_text("popup_batch_pending").format(count=task_count)
         else:
             msg = get_text("popup_task_pending").format(task_id=task_id, status=status)
-        raise RuntimeError(msg)
+        raise JimengException(msg)
 
     async def run_batch(
         self,
@@ -182,6 +196,10 @@ class JimengBatchTaskRunner:
         return_last_frame=True,
         on_tasks_created=None,
     ):
+        """
+        执行批量生成任务。
+        包含任务创建、状态轮询、进度估算和异常处理。
+        """
         ark_client = self.ark_client
         ps_instance = self.ps_instance
         node_id = self.node_id
@@ -189,6 +207,7 @@ class JimengBatchTaskRunner:
         cached_data = non_blocking_cache_dict.get(node_id)
 
         if non_blocking and cached_data:
+            # 处理非阻塞模式下的状态检查
             task_ids = cached_data["task_ids"]
             log_msg("check_status", count=len(task_ids))
             try:
@@ -320,7 +339,8 @@ class JimengBatchTaskRunner:
                     log_msg("batch_failed_reason", msg=err_msg, count=count)
 
         if not tasks_to_poll:
-            log_msg("err_batch_fail_all")
+            if generation_count > 1:
+                log_msg("err_batch_fail_all")
             final_error_msg = "All tasks failed on creation."
             if creation_errors:
                 final_error_msg = format_api_error(creation_errors[0])

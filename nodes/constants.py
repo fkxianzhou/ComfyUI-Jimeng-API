@@ -1,4 +1,32 @@
 # Jimeng API 常量与多语言配置
+
+# 通用常量
+MAX_SEED = 2147483647
+MIN_SEED = -1
+DEFAULT_GUIDANCE_SCALE = 5.0
+MAX_GENERATION_COUNT = 2048
+
+# 图像分辨率常量
+MIN_IMAGE_PIXELS_DEFAULT = 512 * 512
+MAX_IMAGE_PIXELS_DEFAULT = 2048 * 2048
+MIN_IMAGE_PIXELS_V4_5 = 3686400  # 2560x1440
+MAX_IMAGE_PIXELS_V4 = 4096 * 4096
+MIN_ASPECT_RATIO = 1.0 / 16.0
+MAX_ASPECT_RATIO = 16.0
+
+# 视频常量
+VIDEO_MAX_SEED = 4294967295
+VIDEO_DEFAULT_TIMEOUT = 172800
+VIDEO_MIN_TIMEOUT = 3600
+VIDEO_MAX_TIMEOUT = 259200
+VIDEO_FRAME_RATE = 24.0
+VIDEO_MIN_FRAMES = 29
+VIDEO_MAX_FRAMES = 289
+VIDEO_FRAME_STEP = 4.0
+VIDEO_BASE_FRAMES = 25.0
+VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"]
+DEFAULT_FILENAME_PREFIX = "Jimeng/Video/Batch/Seedance"
+
 LOG_TRANSLATIONS = {
     "zh": {
         # 初始化/依赖检查相关
@@ -78,30 +106,30 @@ LOG_TRANSLATIONS = {
 
         # API 错误码映射
         "api_errors": {
-            "AuthenticationError": "API 密钥无效或未找到。请检查 api_keys.json。",
-            "AccessDenied": "访问被拒绝。您没有权限访问该资源或白名单未配置。",
-            "AccountOverdueError": "账户欠费。请前往火山引擎控制台充值。",
-            "ServiceOverdue": "服务欠费。请前往费用中心充值。",
-            "ServiceNotOpen": "服务未开通。请在控制台激活对应的模型服务。",
-            "ModelNotOpen": "模型未开通。请在控制台激活该模型。",
+            "AuthenticationError": "API 鉴权失败。请检查 api_keys.json 文件：1. API Key 是否填写正确；2. JSON 格式是否因编辑而损坏。",
+            "AccessDenied": "没有访问该资源的权限，请检查权限设置，或联系管理员添加白名单。",
+            "AccountOverdueError": "当前账号欠费（余额<0），如需继续调用，请前往 https://console.volcengine.com/finance/fund/recharge 进行充值，详细操作参见 https://www.volcengine.com/docs/6269/100434 。",
+            "ServiceOverdue": "您的账单已逾期，不支持该操作。请前往火山费用中心充值。",
+            "ServiceNotOpen": "模型服务不可用，不支持该操作。请前往火山方舟控制台激活模型服务，或提交工单联系我们。",
+            "ModelNotOpen": "当前账号暂未开通对应模型服务，请前往火山方舟控制台开通管理页开通对应模型服务。",
             "TaskRunningCannotCancel": "任务正在运行中，不支持取消操作。",
-            "RateLimitExceeded": "请求过于频繁。请稍后重试或联系管理员增加配额。",
-            "QuotaExceeded": "配额已耗尽。免费试用额度或并发限制已达到上限。",
-            "ServerOverloaded": "服务器过载。请稍后重试。",
-            "InternalServiceError": "内部服务错误。请稍后重试。",
-            "SensitiveContentDetected": "检测到敏感内容。请修改提示词或输入图像后重试。",
-            "InputTextSensitiveContentDetected": "输入文本包含敏感信息。请修改提示词。",
-            "InputImageSensitiveContentDetected": "输入图像包含敏感信息。请更换图像。",
-            "OutputTextSensitiveContentDetected": "生成文本包含敏感信息。",
-            "OutputImageSensitiveContentDetected": "生成图像包含敏感信息。",
-            "OutputVideoSensitiveContentDetected": "生成视频包含敏感信息。",
-            "InvalidImageURL": "图片 URL 无效或无法解析。",
-            "InvalidImageDetail": "图片 Detail 参数无效。",
-            "MissingParameter": "缺少必要参数。",
-            "InvalidParameter": "请求参数无效。请检查参数是否符合 API 文档要求。",
-            "LastFrameNotSupported": "当前模型不支持尾帧控制。请移除尾帧图片或更换支持的模型。",
+            "RateLimitExceeded": "请求超出 RPM/TPM 限制，请稍后重试。",
+            "QuotaExceeded": "当前账号免费试用额度已消耗完毕，或排队任务数已超限，请前往控制台查看。",
+            "ServerOverloaded": "服务资源紧张，请您稍后重试。常出现在调用流量突增或刚开始调用长时间未使用的推理接入点。",
+            "InternalServiceError": "内部系统异常，请您稍后重试。",
+            "SensitiveContentDetected": "输入文本可能包含敏感信息，请您使用其他 prompt。",
+            "InputTextSensitiveContentDetected": "输入文本可能包含敏感信息，请您更换后重试。",
+            "InputImageSensitiveContentDetected": "输入图像可能包含敏感信息，请您更换后重试。",
+            "OutputTextSensitiveContentDetected": "生成的文字可能包含敏感信息，请您更换输入内容后重试。",
+            "OutputImageSensitiveContentDetected": "生成的图像可能包含敏感信息，请您更换输入内容后重试。",
+            "OutputVideoSensitiveContentDetected": "生成的视频可能包含敏感信息，请您更换输入内容后重试。",
+            "InvalidImageURL": "无法解析或处理图片，可能是 Base64 格式不正确、图片数据损坏或格式不支持。",
+            "InvalidImageDetail": "image_url 中的 detail 参数值无效，只接受 'auto', 'high', 'low'。",
+            "MissingParameter": "请求缺少必要参数，请查阅 API 文档。",
+            "InvalidParameter": "请求包含非法参数，请查阅 API 文档。",
+            "LastFrameNotSupported": "当前模型不支持尾帧控制，请移除尾帧图片或更换支持的模型。",
             "RefImageNotSupported": "当前模型不支持该类型的参考图输入。",
-            "PromptEmpty": "提示词不能为空 (400)，请输入提示词。",
+            "PromptEmpty": "提示词不能为空，请输入提示词。",
         }
     },
     "en": {

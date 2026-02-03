@@ -25,6 +25,7 @@ from .nodes_shared import (
     get_text,
     format_api_error,
     JimengClientType,
+    JimengException,
 )
 from .nodes_video_schema import (
     get_common_video_inputs,
@@ -59,10 +60,16 @@ LAST_SEEDANCE_1_5_DRAFT_TASK_ID = {}
 def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
     for i in text_params:
         if f"--{i}" in prompt:
-            raise ValueError(get_text("popup_param_not_allowed").format(param=i))
+            raise JimengException(get_text("popup_param_not_allowed").format(param=i))
 
+
+from .constants import VIDEO_MAX_SEED
 
 class JimengVideoBase:
+    """
+    Jimeng 视频生成基类。
+    提供通用的任务提交、结果处理和辅助方法。
+    """
     NON_BLOCKING_TASK_CACHE = NON_BLOCKING_TASK_CACHE
 
     def _log_batch_task_failure(self, error_message, task_id=None):
@@ -75,21 +82,21 @@ class JimengVideoBase:
             clean_msg = clean_msg.strip()[len(prefix) :].strip()
         if clean_msg.startswith("Error:"):
             clean_msg = clean_msg[6:].strip()
-        print(f"[JimengAI] {clean_msg}")
+        # print(f"[JimengAI] {clean_msg}")
         if task_id:
             display_msg = get_text("popup_task_failed").format(
                 task_id=task_id, msg=clean_msg
             )
         else:
             display_msg = get_text("popup_req_failed").format(msg=clean_msg)
-        raise RuntimeError(display_msg)
+        raise JimengException(display_msg)
 
     def _create_pending_json(self, status, task_id=None, task_count=0):
         if task_count > 0:
             msg = get_text("popup_batch_pending").format(count=task_count)
         else:
             msg = get_text("popup_task_pending").format(task_id=task_id, status=status)
-        raise RuntimeError(msg)
+        raise JimengException(msg)
 
     def _get_service_options(self, enable_offline, timeout_seconds):
         service_tier = "flex" if enable_offline else "default"
@@ -116,6 +123,10 @@ class JimengVideoBase:
         save_last_frame_batch,
         session,
     ):
+        """
+        异步处理批量任务成功的结果。
+        下载视频和首尾帧，并整理输出。
+        """
         if generation_count > 1:
             log_msg("batch_handling", count=len(successful_tasks))
 
@@ -126,7 +137,7 @@ class JimengVideoBase:
         async def _process_task(task):
             video_url = task.content.video_url
             last_frame_url = getattr(task.content, "last_frame_url", None)
-            seed = getattr(task, "seed", random.randint(0, 4294967295))
+            seed = getattr(task, "seed", random.randint(0, VIDEO_MAX_SEED))
 
             v_coro = download_video_to_temp(
                 session, video_url, video_prefix, seed, temp_save_path
@@ -239,6 +250,10 @@ class JimengVideoBase:
         return_last_frame=True,
         on_tasks_created=None,
     ):
+        """
+        通用的视频生成逻辑。
+        处理参数准备、任务提交、轮询和结果处理。
+        """
         try:
             _raise_if_text_params(prompt, forbidden_params)
 
@@ -300,10 +315,14 @@ class JimengVideoBase:
             s_e = str(e)
             if s_e.startswith("[JimengAI]"):
                 raise e
-            raise RuntimeError(format_api_error(e))
+            raise JimengException(format_api_error(e))
 
 
 class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
+    """
+    Jimeng Seedance 1.0 视频生成节点。
+    支持文生视频和图生视频。
+    """
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
         return comfy_io.Schema(
@@ -376,7 +395,7 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
 
         if last_frame_image is not None:
             if image is None:
-                raise ValueError(get_text("popup_first_frame_missing"))
+                raise JimengException(get_text("popup_first_frame_missing"))
             helper._append_image_content(content, last_frame_image, "last_frame")
 
         service_tier, execution_expires_after = helper._get_service_options(
@@ -413,6 +432,10 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
 
 
 class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
+    """
+    Jimeng Seedance 1.5 Pro 视频生成节点。
+    支持文生视频、图生视频，以及草稿模式和草稿复用。
+    """
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
         return comfy_io.Schema(
@@ -567,7 +590,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
 
         if last_frame_image is not None:
             if image is None:
-                raise ValueError(get_text("popup_first_frame_missing"))
+                raise JimengException(get_text("popup_first_frame_missing"))
             helper._append_image_content(content, last_frame_image, "last_frame")
 
         final_duration = -1.0 if auto_duration else float(duration)
@@ -635,6 +658,10 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
 
 
 class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
+    """
+    Jimeng 参考图生视频节点。
+    支持使用 1-4 张参考图生成视频。
+    """
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
         return comfy_io.Schema(
@@ -698,7 +725,7 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
             helper._append_image_content(content, img, "reference_image")
 
         if not content:
-            raise ValueError(get_text("popup_ref_missing"))
+            raise JimengException(get_text("popup_ref_missing"))
 
         service_tier, execution_expires_after = helper._get_service_options(
             enable_offline_inference, timeout_seconds
@@ -726,6 +753,10 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
 
 
 class JimengVideoQueryTasks(comfy_io.ComfyNode):
+    """
+    Jimeng 任务查询节点。
+    用于查询历史任务状态和列表。
+    """
     MODELS = QUERY_TASKS_MODEL_LIST
     STATUSES = [
         "all",
@@ -756,7 +787,7 @@ class JimengVideoQueryTasks(comfy_io.ComfyNode):
                 comfy_io.Combo.Input(
                     "model_version", options=cls.MODELS, default="all"
                 ),
-                comfy_io.Int.Input("seed", default=0, min=0, max=4294967295),
+                comfy_io.Int.Input("seed", default=0, min=0, max=VIDEO_MAX_SEED),
             ],
             outputs=[
                 comfy_io.String.Output(display_name="task_list_json"),

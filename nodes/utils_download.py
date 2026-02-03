@@ -20,6 +20,9 @@ async def _fetch_data_from_url_async(
     timeout: int = DEFAULT_DOWNLOAD_TIMEOUT,
     retries: int = DEFAULT_DOWNLOAD_RETRIES,
 ) -> bytes:
+    """
+    异步从 URL 获取数据，支持重试机制。
+    """
     for attempt in range(1, retries + 2):
         try:
             client_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -44,6 +47,9 @@ async def _fetch_data_from_url_async(
 async def download_url_to_image_tensor_async(
     session: aiohttp.ClientSession, url: str
 ) -> torch.Tensor | None:
+    """
+    下载图片并转换为 PyTorch Tensor 格式 (Batch, Height, Width, Channel)。
+    """
     if not url:
         return None
     try:
@@ -65,6 +71,9 @@ async def _download_to_temp_base(
     save_path_name: str,
     file_ext: str,
 ) -> tuple[str | None, bytes | None]:
+    """
+    下载文件的基础函数，将文件保存到临时目录。
+    """
     if not url:
         return (None, None)
 
@@ -100,6 +109,9 @@ async def download_video_to_temp(
     seed: int | None,
     save_path_name: str,
 ) -> str | None:
+    """
+    下载视频到临时目录，返回文件路径。
+    """
     if not url:
         return None
     file_ext = url.split(".")[-1].split("?")[0] or "mp4"
@@ -116,6 +128,9 @@ async def download_image_to_temp(
     seed: int | None,
     save_path_name: str,
 ) -> tuple[torch.Tensor | None, str | None]:
+    """
+    下载图片到临时目录，并返回 Tensor 和文件路径。
+    """
     if not url:
         return (None, None)
 
@@ -138,6 +153,9 @@ async def download_image_to_temp(
 
 
 def save_to_output(src_path: str, filename_prefix: str):
+    """
+    将临时文件保存到 ComfyUI 的输出目录。
+    """
     if not src_path or not os.path.exists(src_path):
         return
 

@@ -1,6 +1,9 @@
 import { app } from "/scripts/app.js";
 
-// 定义需监听的组件名称列表
+/**
+ * 定义需监听的组件名称列表
+ * @type {string[]}
+ */
 const TARGET_WIDGETS = [
     'size', 
     'enable_group_generation', 
@@ -13,10 +16,16 @@ const TARGET_WIDGETS = [
 ];
 
 /**
+ * 节点底部预留的缓冲高度
+ * @type {number}
+ */
+const BOTTOM_PADDING = 8;
+
+/**
  * 根据名称查找组件实例
  * @param {object} node - 节点实例
  * @param {string} name - 组件名称
- * @returns {object|null} - 找到的组件或 null
+ * @returns {object|null} 找到的组件或 null
  */
 function findWidgetByName(node, name) {
     if (!node.widgets) return null;
@@ -24,14 +33,27 @@ function findWidgetByName(node, name) {
 }
 
 /**
+ * 检查节点是否存在同名输入且已被链接
+ * @param {object} node - 节点实例
+ * @param {string} name - 组件名称
+ * @returns {boolean} 是否存在已链接的同名输入
+ */
+function isWidgetLinked(node, name) {
+    return node.inputs ? node.inputs.some((input) => input.name === name && input.link !== null) : false;
+}
+
+/**
  * 切换组件可见性状态
  * @param {object} node - 节点实例
  * @param {object} widget - 目标组件
  * @param {boolean} show - 是否显示
- * @returns {boolean} - 状态是否发生实质变更
+ * @returns {boolean} 状态是否发生实质变更
  */
 function toggleWidget(node, widget, show) {
     if (!widget) return false;
+
+    // 如果组件已被转换为输入且已链接，则不进行隐藏操作
+    if (isWidgetLinked(node, widget.name)) return false;
 
     // 缓存组件原始类型与尺寸计算方法
     if (!widget.origType && widget.type !== "hidden") {
@@ -63,7 +85,7 @@ function toggleWidget(node, widget, show) {
 /**
  * 更新节点高度，并保留用户手动调整的额外空间
  * @param {object} node - 节点实例
- * @param {number} extraHeight - 用户手动拉伸的额外高度补偿值
+ * @param {number} [extraHeight=0] - 用户手动拉伸的额外高度补偿值
  */
 function updateNodeHeight(node, extraHeight = 0) {
     if (node.flags?.collapsed) return;
@@ -71,11 +93,65 @@ function updateNodeHeight(node, extraHeight = 0) {
     // 计算基础最小所需尺寸
     const size = node.computeSize();
     
-    // 叠加用户手动调整的高度差，确保布局变更时不丢失拉伸空间
+    // 叠加用户手动调整的高度差，并加上底部缓冲
     const targetHeight = size[1] + extraHeight;
 
     node.setSize([node.size[0], targetHeight]);
     app.graph.setDirtyCanvas(true, true);
+}
+
+/**
+ * 为最后一个可见组件注入底部缓冲
+ * @param {object} node - 节点实例
+ * @returns {boolean} 是否发生了变更
+ */
+function applyBottomPadding(node) {
+    if (!node.widgets) return false;
+
+    // 1. 找到最后一个可见组件
+    let lastWidget = null;
+    for (let i = node.widgets.length - 1; i >= 0; i--) {
+        if (node.widgets[i].type !== "hidden") {
+            lastWidget = node.widgets[i];
+            break;
+        }
+    }
+    
+    let changed = false;
+
+    // 2. 清理之前注入的 Padding（如果有）
+    node.widgets.forEach(w => {
+        if (w !== lastWidget && w.hasBottomPadding) {
+            w.computeSize = w.origComputeSizeBeforePadding;
+            delete w.origComputeSizeBeforePadding;
+            delete w.hasBottomPadding;
+            changed = true;
+        }
+    });
+
+    if (!lastWidget) return changed;
+
+    // 3. 给当前的 lastWidget 注入 Padding
+    if (!lastWidget.hasBottomPadding) {
+        if (!lastWidget.computeSize) {
+            // 如果没有 computeSize，创建一个默认的 guess
+            lastWidget.computeSize = () => [0, 20]; 
+        }
+        
+        lastWidget.origComputeSizeBeforePadding = lastWidget.computeSize;
+        const originalMethod = lastWidget.computeSize;
+        
+        lastWidget.computeSize = function(...args) {
+            const size = originalMethod.apply(this, args);
+            // 确保返回新数组，并在高度上增加 Padding
+            return [size ? size[0] : 0, (size ? size[1] : 20) + BOTTOM_PADDING];
+        };
+        
+        lastWidget.hasBottomPadding = true;
+        changed = true;
+    }
+    
+    return changed;
 }
 
 /**
@@ -194,7 +270,12 @@ function widgetLogic(node, widget) {
     }
 
     // 2. 若检测到布局实质变更，应用新尺寸并恢复高度差
-    if (shouldResize) {
+    const paddingChanged = applyBottomPadding(node);
+
+    // 如果正在配置中（如从 workflow 加载），则跳过高度调整，避免覆盖用户保存的尺寸
+    if (node._isConfiguring) return;
+
+    if (shouldResize || paddingChanged) {
         updateNodeHeight(node, extraHeight);
     }
 }
@@ -209,16 +290,23 @@ app.registerExtension({
     nodeCreated(node) {
         if (!node.comfyClass.startsWith("Jimeng")) return;
 
+        // 劫持 configure 方法以检测是否处于加载/配置阶段
+        const origConfigure = node.configure;
+        node.configure = function(data) {
+            this._isConfiguring = true;
+            const r = origConfigure ? origConfigure.apply(this, arguments) : undefined;
+            delete this._isConfiguring;
+            return r;
+        };
+
         // 筛选需监听的组件
         const widgetsToWatch = node.widgets?.filter(w => TARGET_WIDGETS.includes(w.name));
 
         if (!widgetsToWatch || widgetsToWatch.length === 0) return;
 
         widgetsToWatch.forEach(w => {
-            // 延迟初始化以确保组件状态就绪
-            setTimeout(() => {
-                widgetLogic(node, w);
-            }, 100);
+            // 立即执行逻辑，避免创建时闪烁
+            widgetLogic(node, w);
 
             // 劫持 value 属性以监听变更
             let widgetValue = w.value;
