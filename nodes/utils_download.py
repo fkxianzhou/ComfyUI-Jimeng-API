@@ -1,5 +1,6 @@
 import os
 import io
+import time
 import asyncio
 import aiohttp
 import torch
@@ -26,9 +27,13 @@ async def _fetch_data_from_url_async(
     for attempt in range(1, retries + 2):
         try:
             client_timeout = aiohttp.ClientTimeout(total=timeout)
+            # t0 = time.time()
             async with session.get(url, timeout=client_timeout) as response:
                 response.raise_for_status()
-                return await response.read()
+                data = await response.read()
+                # t1 = time.time()
+                # print(f"[JimengAI Debug] Downloaded {len(data)} bytes from {url} in {t1 - t0:.2f}s")
+                return data
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             if attempt > retries:
                 raise e
@@ -93,14 +98,57 @@ async def _download_to_temp_base(
     final_path = os.path.join(full_output_folder, final_filename)
 
     try:
+        # t0 = time.time()
         data = await _fetch_data_from_url_async(session, url)
+        # t1 = time.time()
         with open(final_path, "wb") as f:
             f.write(data)
+        # t2 = time.time()
+        # print(f"[JimengAI Debug] Saved to {final_path}. Fetch: {t1 - t0:.2f}s, Write: {t2 - t1:.2f}s")
         return (final_path, data)
     except Exception as e:
         log_msg("err_download_url", url=url, e=e)
         return (None, None)
 
+
+async def _download_to_file_stream_async(
+    session: aiohttp.ClientSession,
+    url: str,
+    file_path: str,
+    timeout: int = DEFAULT_DOWNLOAD_TIMEOUT,
+    retries: int = DEFAULT_DOWNLOAD_RETRIES,
+) -> bool:
+    """
+    流式下载并写入文件
+    """
+    for attempt in range(1, retries + 2):
+        try:
+            client_timeout = aiohttp.ClientTimeout(total=timeout)
+            # t0 = time.time()
+            async with session.get(url, timeout=client_timeout) as response:
+                response.raise_for_status()
+                with open(file_path, "wb") as f:
+                    while True:
+                        chunk = await response.content.read(1024 * 1024)  # 1MB chunk
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                # t1 = time.time()
+                # print(f"[JimengAI Debug] Stream downloaded to {file_path} in {t1 - t0:.2f}s")
+                return True
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            if attempt > retries:
+                raise e
+            retry_delay = 2
+            log_msg(
+                "download_retry",
+                attempt=attempt,
+                total=retries + 1,
+                delay=retry_delay,
+                e=e,
+            )
+            await asyncio.sleep(retry_delay)
+    return False
 
 async def download_video_to_temp(
     session: aiohttp.ClientSession,
@@ -115,10 +163,30 @@ async def download_video_to_temp(
     if not url:
         return None
     file_ext = url.split(".")[-1].split("?")[0] or "mp4"
-    (path, _) = await _download_to_temp_base(
-        session, url, prefix, seed, save_path_name, file_ext
+
+    if seed is not None:
+        prefix = f"{prefix}_seed_{seed}"
+
+    output_dir = folder_paths.get_temp_directory()
+    if save_path_name:
+        output_dir = os.path.join(output_dir, save_path_name)
+
+    (full_output_folder, filename, _, _, _) = folder_paths.get_save_image_path(
+        prefix, output_dir
     )
-    return path
+    os.makedirs(full_output_folder, exist_ok=True)
+
+    final_filename = f"{filename}_{random.randint(1, 10000)}.{file_ext}"
+    final_path = os.path.join(full_output_folder, final_filename)
+
+    try:
+        success = await _download_to_file_stream_async(session, url, final_path)
+        if success:
+            return final_path
+        return None
+    except Exception as e:
+        log_msg("err_download_url", url=url, e=e)
+        return None
 
 
 async def download_image_to_temp(

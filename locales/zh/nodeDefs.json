@@ -4,8 +4,16 @@
     "description": "加载 `api_keys.json` 文件中指定的 API 密钥，并创建一个可供其他节点使用的客户端实例。",
     "inputs": {
       "key_name": {
-        "name": "密钥名称",
-        "tooltip": "在 api_keys.json 中配置的自定义密钥名称。"
+        "name": "密钥",
+        "tooltip": "在 api_keys.json 中配置的密钥。"
+      },
+      "new_api_key": {
+        "name": "API Key",
+        "tooltip": "在此处粘贴您在火山方舟创建的 API Key。"
+      },
+      "new_key_name": {
+        "name": "保存名称 (可选)",
+        "tooltip": "若填写此项，API Key 将被保存到 api_keys.json 中。注意：保存后需刷新浏览器页面，新密钥才会显示在下拉列表中。"
       }
     },
     "outputs": {

@@ -127,6 +127,7 @@ class JimengVideoBase:
         异步处理批量任务成功的结果。
         下载视频和首尾帧，并整理输出。
         """
+        # t_start = time.time()
         if generation_count > 1:
             log_msg("batch_handling", count=len(successful_tasks))
 
@@ -222,6 +223,9 @@ class JimengVideoBase:
                 if save_last_frame_batch and f_path:
                     save_to_output(f_path, filename_prefix)
 
+        # t_end = time.time()
+        # print(f"[JimengAI Debug] Batch handling finished in {t_end - t_start:.2f}s")
+        
         return comfy_io.NodeOutput(
             first_video, first_frame, json.dumps(all_responses, indent=2)
         )
@@ -296,9 +300,7 @@ class JimengVideoBase:
             )
 
             ret_results = None
-            async with aiohttp.ClientSession(
-                connector=aiohttp.TCPConnector(force_close=True)
-            ) as session:
+            async with aiohttp.ClientSession() as session:
                 ret_results = await self._handle_batch_success_async(
                     successful_tasks,
                     filename_prefix,

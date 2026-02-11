@@ -7,6 +7,7 @@ import re
 import numpy
 import PIL.Image
 import torch
+import requests
 from volcenginesdkarkruntime import Ark
 
 from comfy_api.latest import io as comfy_io
@@ -14,6 +15,33 @@ from comfy_api.latest import io as comfy_io
 import logging
 
 from .constants import LOG_TRANSLATIONS, ERROR_TEXT_MATCH_RULES
+
+LOG_PREFIX = "[JimengAI] "
+
+def patch_log_translations():
+    """
+    自动为日志消息添加前缀。
+    """
+    ignore_keys = {"api_errors"}
+    
+    for lang in LOG_TRANSLATIONS:
+        trans_map = LOG_TRANSLATIONS[lang]
+        for key, value in trans_map.items():
+            if key in ignore_keys or key.startswith("est_"):
+                continue
+            
+            if isinstance(value, str):
+                if value.strip().startswith("-"):
+                    continue
+                
+                if value.startswith("\n"):
+                    if LOG_PREFIX.strip() not in value:
+                        trans_map[key] = "\n" + LOG_PREFIX + value[1:]
+                else:
+                    if not value.startswith(LOG_PREFIX):
+                        trans_map[key] = LOG_PREFIX + value
+
+patch_log_translations()
 
 logger = logging.getLogger("JimengAI")
 if not logger.handlers:
@@ -48,13 +76,19 @@ def detect_system_language():
     return "en"
 
 
-def get_text(key):
+def get_text(key, **kwargs):
     """
     获取指定 key 的本地化文本。
     """
     global CURRENT_LANG
     mapping = LOG_TRANSLATIONS.get(CURRENT_LANG, LOG_TRANSLATIONS["en"])
-    return mapping.get(key, LOG_TRANSLATIONS["en"].get(key, key))
+    msg = mapping.get(key, LOG_TRANSLATIONS["en"].get(key, key))
+    if kwargs:
+        try:
+            return msg.format(**kwargs)
+        except:
+            pass
+    return msg
 
 
 def log_msg(key, default_msg="", **kwargs):
@@ -139,20 +173,65 @@ def load_api_keys():
     CURRENT_LANG = detect_system_language()
 
     if not os.path.exists(API_KEYS_FILE):
-        log_msg("api_file_not_found")
-        return
+        pass
 
     try:
-        with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
-            keys_data = json.load(f)
-            if isinstance(keys_data, list):
-                for item in keys_data:
-                    if "customName" in item and "apiKey" in item:
-                        API_KEYS_CONFIG.append(item)
-            if not API_KEYS_CONFIG:
-                log_msg("api_file_empty")
+        if os.path.exists(API_KEYS_FILE):
+            with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
+                keys_data = json.load(f)
+                if isinstance(keys_data, list):
+                    for item in keys_data:
+                        if "customName" in item and "apiKey" in item:
+                            API_KEYS_CONFIG.append(item)
     except Exception as e:
         log_msg("api_load_error", e=e)
+
+
+def save_api_key(name, key):
+    """
+    保存新的 API Key 到配置文件。
+    """
+    global API_KEYS_CONFIG
+    
+    updated = False
+    for item in API_KEYS_CONFIG:
+        if item["customName"] == name:
+            item["apiKey"] = key
+            updated = True
+            break
+    
+    if not updated:
+        API_KEYS_CONFIG.append({"customName": name, "apiKey": key})
+    
+    try:
+        with open(API_KEYS_FILE, "w", encoding="utf-8") as f:
+            json.dump(API_KEYS_CONFIG, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved API Key: {name}")
+    except Exception as e:
+        logger.error(f"Failed to save API key: {e}")
+
+
+def validate_api_key(api_key: str) -> bool:
+    """
+    验证 API Key 是否有效。
+    """
+    try:
+        url = "https://ark.cn-beijing.volces.com/api/v3"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 401:
+            return False
+            
+        return True
+        
+    except Exception as e:
+        logger.error(f"API Key validation error: {e}")
+        return False
 
 
 def _tensor2images(tensor: torch.Tensor) -> list:
@@ -202,27 +281,44 @@ class JimengAPIClient(comfy_io.ComfyNode):
     def define_schema(cls) -> comfy_io.Schema:
         load_api_keys()
         key_names = [key["customName"] for key in API_KEYS_CONFIG]
-        if not key_names:
-            key_names = [get_text("combo_no_keys")]
+        key_names.append("Custom")
 
         return comfy_io.Schema(
             node_id="JimengAPIClient",
             display_name="Jimeng API Client",
             category=GLOBAL_CATEGORY,
-            inputs=[comfy_io.Combo.Input("key_name", options=key_names)],
+            inputs=[
+                comfy_io.String.Input("new_api_key", default=""),
+                comfy_io.String.Input("new_key_name", default=""),
+                comfy_io.Combo.Input("key_name", options=key_names),
+            ],
             outputs=[JimengClientType.Output(display_name="client")],
         )
 
     @classmethod
-    def execute(cls, key_name) -> comfy_io.NodeOutput:
+    def execute(
+        cls, key_name, new_api_key="", new_key_name=""
+    ) -> comfy_io.NodeOutput:
         api_key = None
-        if key_name == get_text("combo_no_keys"):
-            raise JimengException(get_text("api_file_not_found"))
 
-        for key_info in API_KEYS_CONFIG:
-            if key_info["customName"] == key_name:
-                api_key = key_info["apiKey"]
-                break
+        if key_name == "Custom":
+            if not new_api_key or not new_api_key.strip():
+                raise JimengException(get_text("err_new_key_empty"))
+            
+            api_key = new_api_key.strip()
+            
+            if not validate_api_key(api_key):
+                raise JimengException(get_text("err_new_key_invalid"))
+            
+            if new_key_name and new_key_name.strip():
+                save_api_key(new_key_name.strip(), api_key)
+                print(get_text("info_new_key_saved", name=new_key_name.strip()))
+
+        else:
+            for key_info in API_KEYS_CONFIG:
+                if key_info["customName"] == key_name:
+                    api_key = key_info["apiKey"]
+                    break
 
         if not api_key:
             log_msg("api_key_not_found", key_name=key_name)

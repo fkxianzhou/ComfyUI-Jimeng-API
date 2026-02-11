@@ -26,9 +26,19 @@
 
 ## ⚙️ 设置：配置 API 密钥
 
+### 方式 1：手动配置
+
 1.  在插件根目录中找到 `api_keys.json.example` 文件。
 2.  将其**重命名**为 `api_keys.json`。
 3.  打开文件并填入您的密钥信息（[从此获取 Key](https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey)）。
+
+### 方式 2：节点内配置
+
+1.  在 ComfyUI 中添加 **Jimeng API Client** 节点。
+2.  在 `key_name` 下拉框中选择 **Custom**。
+3.  在弹出的输入框中填入您的 API Key。
+4.  （可选）在 `new_key_name` 中填入一个名称（如 "MyKey"），运行一次后该 Key 将被自动保存。
+    *   *注意：保存后需刷新浏览器页面，新密钥才会显示在下拉列表中。*
 
 ## 📖 功能节点列表
 
@@ -59,7 +69,7 @@
 - **特性**: 支持自定义尺寸，支持引导系数调节。
 
 **示例工作流**:
-![Seedream 3 Workflow](example_workflows/Seedream%203.png)
+![Seedream 3 Workflow](example_workflows/Seedream%203.jpg)
 
 ---
 
@@ -69,7 +79,7 @@
 - **输入图像**: 支持单张或多张（Batch）图像作为参考。
 
 **示例工作流**:
-![Seedream 4 Workflow](example_workflows/Seedream%204.png)
+![Seedream 4 Workflow](example_workflows/Seedream%204.jpg)
 
 ---
 
@@ -84,7 +94,7 @@
 支持按状态、模型版本或任务 ID 过滤查询任务历史。
 
 **示例工作流**:
-![Seedance Workflow](example_workflows/Seedance.png)
+![Seedance 1 Workflow](example_workflows/Seedance%201.jpg)
 
 ## 📓 示例工作流
 

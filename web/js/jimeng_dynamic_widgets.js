@@ -12,7 +12,8 @@ const TARGET_WIDGETS = [
     'enable_random_seed', 
     'auto_duration',
     'draft_mode',
-    'reuse_last_draft_task'
+    'reuse_last_draft_task',
+    'key_name'
 ];
 
 /**
@@ -266,6 +267,20 @@ function widgetLogic(node, widget) {
             const changedControl = toggleWidget(node, controlWidget, showSeedControls);
             
             if (changedSeed || changedControl) shouldResize = true;
+        }
+    }
+
+    // 处理 API Client 节点逻辑
+    if (node.comfyClass === "JimengAPIClient") {
+        if (widget.name === 'key_name') {
+            const isCustom = widget.value === "Custom";
+            const newKeyWidget = findWidgetByName(node, 'new_api_key');
+            const newNameWidget = findWidgetByName(node, 'new_key_name');
+
+            const changedKey = toggleWidget(node, newKeyWidget, isCustom);
+            const changedName = toggleWidget(node, newNameWidget, isCustom);
+            
+            if (changedKey || changedName) shouldResize = true;
         }
     }
 
