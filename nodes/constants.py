@@ -115,6 +115,7 @@ LOG_TRANSLATIONS = {
         "quota_exceeded": "配额限制: 模型 {model} 的使用量已达到上限 ({used}/{limit})。预计消耗: {estimated}。限制已自动解除，请重新运行或设置新的配额。",
         "quota_update_failed": "警告: 更新配额用量失败: {e}",
         "quota_set_log": "设置配额: {model} -> {limit} ({type})",
+        "quota_update_log": "更新用量: {model} +{cost} (总计: {total})",
         
         # API 错误码映射
         "api_errors": {
@@ -213,6 +214,7 @@ LOG_TRANSLATIONS = {
         "quota_exceeded": "Quota Exceeded: Usage limit for model {model} reached ({used}/{limit}). Estimated cost: {estimated}. Limit has been automatically removed. Please run again or set a new quota.",
         "quota_update_failed": "Warning: Failed to update quota usage: {e}",
         "quota_set_log": "Set quota for {model}: {limit} ({type})",
+        "quota_update_log": "Updated usage for {model}: +{cost} (Total: {total})",
         "api_errors": {
             "AuthenticationError": "Invalid API Key (401). Please check api_keys.json.",
             "AccessDenied": "Access Denied (403). No permission or IP whitelist issue.",

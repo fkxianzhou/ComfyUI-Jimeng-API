@@ -25,10 +25,6 @@ class QuotaManager:
     def set_quota(self, api_key: str, model: str, limit: int, quota_type: str):
         """
         设置配额。
-        :param api_key: API Key
-        :param model: 模型名称
-        :param limit: 限制值 (图像为张数，视频为 Tokens)
-        :param quota_type: "image" 或 "video"
         """
         from .nodes_shared import log_msg
         
@@ -69,7 +65,6 @@ class QuotaManager:
     def check_quota(self, api_key: str, model: str, estimated_cost: int):
         """
         检查配额是否足够。
-        :param estimated_cost: 估算的消耗 (张数或Tokens)
         """
         with self._lock:
             if api_key not in self._quotas:
@@ -97,6 +92,8 @@ class QuotaManager:
         """
         更新实际用量。
         """
+        from .nodes_shared import log_msg
+
         with self._lock:
             if api_key not in self._quotas:
                 return
@@ -105,7 +102,7 @@ class QuotaManager:
                 return
 
             self._quotas[api_key][model]["used"] += actual_cost
-            logger.info(f"Updated usage for {model}: +{actual_cost} (Total: {self._quotas[api_key][model]['used']})")
+            log_msg("quota_update_log", model=model, cost=actual_cost, total=self._quotas[api_key][model]['used'])
 
     def estimate_video_tokens(self, model: str, width: int, height: int, duration: float, fps: float, has_audio: bool = False, is_draft: bool = False) -> int:
         """
@@ -134,7 +131,6 @@ class JimengQuotaSettings(comfy_io.ComfyNode):
     用于设置图像和视频生成的配额限制。
     """
     
-    # 获取模型列表
     IMAGE_MODELS = ["None"] + list(SEEDREAM_4_MODEL_MAP.keys()) + ["doubao-seedream-3.0-t2i", "doubao-seedream-3.0-i2i"]
     VIDEO_MODELS = ["None"] + list(VIDEO_MODEL_MAP.keys())
 
