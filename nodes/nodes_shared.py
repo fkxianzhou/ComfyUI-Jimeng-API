@@ -268,8 +268,21 @@ class JimengClients:
     """
     包装 Ark 客户端的容器类。
     """
-    def __init__(self, ark_client):
+    def __init__(self, ark_client, api_key=None):
         self.ark = ark_client
+        self.api_key = api_key
+
+    def check_quota(self, model: str, estimated_cost: int):
+        if not self.api_key:
+            return
+        from .quota import QuotaManager
+        QuotaManager.instance().check_quota(self.api_key, model, estimated_cost)
+
+    def update_usage(self, model: str, actual_cost: int):
+        if not self.api_key:
+            return
+        from .quota import QuotaManager
+        QuotaManager.instance().update_usage(self.api_key, model, actual_cost)
 
 
 class JimengAPIClient(comfy_io.ComfyNode):
@@ -328,4 +341,4 @@ class JimengAPIClient(comfy_io.ComfyNode):
             api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
 
-        return comfy_io.NodeOutput(JimengClients(ark_client))
+        return comfy_io.NodeOutput(JimengClients(ark_client, api_key))

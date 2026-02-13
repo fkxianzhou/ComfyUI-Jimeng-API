@@ -208,6 +208,8 @@ class JimengSeedream3(comfy_io.ComfyNode):
             image_param = f"data:image/jpeg;base64,{_image_to_base64(image)}"
             size_param = "adaptive"
 
+        client.check_quota(model_id, generation_count)
+
         if generation_count > 1:
             log_msg("batch_submit_start", count=generation_count, model=model_id)
 
@@ -254,7 +256,16 @@ class JimengSeedream3(comfy_io.ComfyNode):
                     raise e
                 raise JimengException(format_api_error(e))
 
-        return await helper.execute_generation(generation_count, _generate_single)
+        result = await helper.execute_generation(generation_count, _generate_single)
+        
+        if result and result[0] is not None:
+            try:
+                count = result[0].shape[0]
+                client.update_usage(model_id, count)
+            except:
+                pass
+        
+        return result
 
 
 class JimengSeedream4(comfy_io.ComfyNode):
@@ -366,6 +377,8 @@ class JimengSeedream4(comfy_io.ComfyNode):
         seq_options = None
         if sequential_param == "auto":
             seq_options = SequentialImageGenerationOptions(max_images=max_images)
+
+        client.check_quota(model_id, generation_count * max_images if enable_group_generation else generation_count)
 
         if generation_count > 1:
             log_msg("batch_submit_start", count=generation_count, model=model_id)
@@ -525,4 +538,13 @@ class JimengSeedream4(comfy_io.ComfyNode):
                     raise e
                 raise JimengException(str(e))
 
-        return await helper.execute_generation(generation_count, _generate_single)
+        result = await helper.execute_generation(generation_count, _generate_single)
+
+        if result and result[0] is not None:
+            try:
+                count = result[0].shape[0]
+                client.update_usage(model_id, count)
+            except:
+                pass
+        
+        return result

@@ -350,7 +350,7 @@ class JimengBatchTaskRunner:
             try:
                 on_tasks_created(tasks_to_poll)
             except Exception as e:
-                print(f"[JimengAI] Warning: on_tasks_created callback failed: {e}")
+                log_msg("err_on_tasks_created", e=e)
 
         if non_blocking:
             task_ids = [t.id for t in tasks_to_poll]

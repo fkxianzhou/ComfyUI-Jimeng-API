@@ -25,6 +25,12 @@ VIDEO_MAX_FRAMES = 289
 VIDEO_FRAME_STEP = 4.0
 VIDEO_BASE_FRAMES = 25.0
 VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"]
+# 视频分辨率对应的像素总量估算
+VIDEO_RESOLUTION_PIXELS = {
+    "480p": 409920,
+    "720p": 921600,
+    "1080p": 2073600,
+}
 DEFAULT_FILENAME_PREFIX = "Jimeng/Video/Batch/Seedance"
 
 LOG_TRANSLATIONS = {
@@ -106,6 +112,10 @@ LOG_TRANSLATIONS = {
         "err_new_key_invalid": "鉴权失败: 输入的 API Key 无效，请检查 Key 是否正确。",
         "info_new_key_saved": "提示: 新密钥 '{name}' 已通过鉴权并保存到 api_keys.json。",
 
+        "quota_exceeded": "配额限制: 模型 {model} 的使用量已达到上限 ({used}/{limit})。预计消耗: {estimated}。限制已自动解除，请重新运行或设置新的配额。",
+        "quota_update_failed": "警告: 更新配额用量失败: {e}",
+        "quota_set_log": "设置配额: {model} -> {limit} ({type})",
+        
         # API 错误码映射
         "api_errors": {
             "AuthenticationError": "API 鉴权失败。请检查 api_keys.json 文件：1. API Key 是否填写正确；2. JSON 格式是否因编辑而损坏。",
@@ -200,6 +210,9 @@ LOG_TRANSLATIONS = {
         "err_new_key_empty": "Config Error: Manual entry enabled but API Key is empty.",
         "err_new_key_invalid": "Auth Failed: Input API Key is invalid. Connection rejected by server.",
         "info_new_key_saved": "Info: New key '{name}' verified and saved to api_keys.json.",
+        "quota_exceeded": "Quota Exceeded: Usage limit for model {model} reached ({used}/{limit}). Estimated cost: {estimated}. Limit has been automatically removed. Please run again or set a new quota.",
+        "quota_update_failed": "Warning: Failed to update quota usage: {e}",
+        "quota_set_log": "Set quota for {model}: {limit} ({type})",
         "api_errors": {
             "AuthenticationError": "Invalid API Key (401). Please check api_keys.json.",
             "AccessDenied": "Access Denied (403). No permission or IP whitelist issue.",

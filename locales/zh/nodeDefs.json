@@ -477,5 +477,37 @@
         "tooltip": "符合条件的总任务数量。"
       }
     }
+  },
+  "JimengQuotaSettings": {
+    "display_name": "配额设置",
+    "description": "设置火山方舟 API 的使用配额限制。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "火山方舟 API 客户端。"
+      },
+      "image_model": {
+        "name": "图像模型",
+        "tooltip": "选择要设置配额的图像模型。"
+      },
+      "image_limit": {
+        "name": "图像限额 (张)",
+        "tooltip": "最大允许生成的图像数量。设为 0 表示不限制。"
+      },
+      "video_model": {
+        "name": "视频模型",
+        "tooltip": "选择要设置配额的视频模型。"
+      },
+      "video_limit": {
+        "name": "视频限额 (Tokens)",
+        "tooltip": "最大允许消耗的 Token 数量。设为 0 表示不限制。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "状态",
+        "tooltip": "当前的配额使用状态。"
+      }
+    }
   }
 }

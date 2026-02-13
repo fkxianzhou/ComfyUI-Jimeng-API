@@ -258,6 +258,9 @@ class JimengVideoBase:
         通用的视频生成逻辑。
         处理参数准备、任务提交、轮询和结果处理。
         """
+        from .quota import QuotaManager
+        from .constants import VIDEO_FRAME_RATE, VIDEO_RESOLUTION_PIXELS
+
         try:
             _raise_if_text_params(prompt, forbidden_params)
 
@@ -279,6 +282,20 @@ class JimengVideoBase:
                 key, val, est = _calculate_duration_and_frames_args(duration)
                 extra_api_params[key] = val
                 estimation_duration = est
+            
+            est_pixels = VIDEO_RESOLUTION_PIXELS.get(resolution, 1280 * 720)
+            is_draft = extra_api_params.get("draft", False)
+            has_audio = extra_api_params.get("generate_audio", False)
+            
+            est_tokens_per_video = QuotaManager.instance().estimate_video_tokens(
+                model_name,
+                width=1, height=est_pixels, # pixels product
+                duration=estimation_duration,
+                fps=VIDEO_FRAME_RATE,
+                has_audio=has_audio,
+                is_draft=is_draft
+            )
+            client.check_quota(model_name, est_tokens_per_video * generation_count)
 
             content.insert(0, {"type": "text", "text": prompt})
             comfy.model_management.throw_exception_if_processing_interrupted()
@@ -309,6 +326,20 @@ class JimengVideoBase:
                     session,
                 )
                 await asyncio.sleep(0.25)
+            
+            if ret_results and ret_results[2]:
+                try:
+                    resp_list = json.loads(ret_results[2])
+                    total_tokens = 0
+                    for item in resp_list:
+                        if "usage" in item and item["usage"] and "completion_tokens" in item["usage"]:
+                            total_tokens += item["usage"]["completion_tokens"]
+                    
+                    if total_tokens > 0:
+                        client.update_usage(model_name, total_tokens)
+                except Exception as e:
+                    log_msg("quota_update_failed", e=e)
+
             return ret_results
 
         except Exception as e:
