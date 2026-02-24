@@ -174,7 +174,7 @@ function widgetLogic(node, widget) {
     let shouldResize = false; 
 
     // 处理图像生成节点逻辑
-    if (node.comfyClass === "JimengSeedream3" || node.comfyClass === "JimengSeedream4") {
+    if (node.comfyClass === "JimengSeedream3" || node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
         if (widget.name === 'size') {
             const isCustom = widget.value === "Custom";
             const widthWidget = findWidgetByName(node, 'width');
@@ -188,7 +188,7 @@ function widgetLogic(node, widget) {
     }
 
     // 处理分组生成逻辑
-    if (node.comfyClass === "JimengSeedream4") {
+    if (node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
         if (widget.name === 'enable_group_generation') {
             const isGroupMode = widget.value === true;
             const maxImagesWidget = findWidgetByName(node, 'max_images');

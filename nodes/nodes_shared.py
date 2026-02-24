@@ -4,10 +4,13 @@ import base64
 import locale
 import json
 import re
+import folder_paths
+import time
 import numpy
 import PIL.Image
 import torch
 import requests
+import cv2
 from volcenginesdkarkruntime import Ark
 
 from comfy_api.latest import io as comfy_io
@@ -105,6 +108,27 @@ def log_msg(key, default_msg="", **kwargs):
             logger.info(msg.format(**kwargs))
         except:
             logger.info(msg)
+
+
+def get_node_count_in_workflow(class_type, prompt=None):
+    """
+    获取当前工作流中指定类型节点的数量。
+    """
+    try:
+        if prompt is None:
+            from server import PromptServer
+            prompt = PromptServer.instance.prompt
+        
+        if not prompt:
+            return 0
+        
+        count = 0
+        for key, value in prompt.items():
+            if value.get("class_type") == class_type:
+                count += 1
+        return count
+    except Exception:
+        return 0
 
 
 def format_api_error(e):
@@ -252,6 +276,57 @@ def _image_to_base64(image: torch.Tensor) -> str:
         _tensor2images(image)[0].save(bytes_io, format="JPEG")
         data_bytes = bytes_io.getvalue()
     return base64.b64encode(data_bytes).decode("utf-8")
+
+
+def create_white_image_tensor(width=1024, height=1024):
+    """
+    创建一个指定大小的纯白图片 Tensor。
+    Shape: [1, height, width, 3]
+    """
+    return torch.ones((1, height, width, 3), dtype=torch.float32)
+
+
+def create_white_video_file(filename_prefix, width=1024, height=1024):
+    """
+    创建一个指定大小的 1 帧纯白视频文件 (H.264 MP4)。
+    返回视频文件的绝对路径。
+    """
+    import tempfile
+    try:
+        import cv2
+    except ImportError:
+        return None
+
+    try:
+        temp_dir = folder_paths.get_temp_directory()
+        timestamp = int(time.time() * 1000)
+        
+        flat_prefix = filename_prefix.replace("/", "_").replace("\\", "_")
+        filename = f"{flat_prefix}_dummy_{timestamp}.mp4"
+        
+        filepath = os.path.join(temp_dir, filename)
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fps = 24.0
+        out = cv2.VideoWriter(filepath, fourcc, fps, (width, height))
+        
+        if not out.isOpened():
+            log_msg("err_create_dummy_video", e="Failed to open VideoWriter with mp4v")
+            return None
+
+        white_frame = numpy.ones((height, width, 3), dtype=numpy.uint8) * 255
+        
+        out.write(white_frame)
+        out.release()
+        
+        if not os.path.exists(filepath):
+             log_msg("err_create_dummy_video", e="File was not created on disk")
+             return None
+        
+        return filepath
+    except Exception as e:
+        log_msg("err_create_dummy_video", e=e)
+        return None
 
 
 class JimengException(Exception):

@@ -5,7 +5,6 @@ app.registerExtension({
     name: "ComfyUI.Jimeng.ProgressBar",
 
     async setup() {
-        // 监听进度事件
         api.addEventListener("progress", ({ detail }) => {
             const { value, max, node } = detail;
             const graphNode = app.graph.getNodeById(node);
@@ -19,12 +18,29 @@ app.registerExtension({
             }
         });
 
-        // 监听执行完成
+        api.addEventListener("jimeng_fake_progress", ({ detail }) => {
+            const { max, node } = detail;
+            const graphNode = app.graph.getNodeById(node);
+
+            if (graphNode && graphNode.comfyClass.startsWith("Jimeng")) {
+                graphNode.jimeng_progress_mode = "auto";
+                graphNode.jimeng_progress_startTime = performance.now();
+                graphNode.jimeng_progress_duration = Math.max(max, 1) * 1000;
+                graphNode.jimeng_progress_ratio = 0;
+                graphNode.jimeng_progress_text = "";
+
+                app.graph.setDirtyCanvas(true, false);
+            }
+        });
+
         api.addEventListener("executed", ({ detail }) => {
              const graphNode = app.graph.getNodeById(detail.node);
              if (graphNode && graphNode.comfyClass.startsWith("Jimeng")) {
                  graphNode.jimeng_progress_ratio = 0;
                  graphNode.jimeng_progress_text = "";
+                 graphNode.jimeng_progress_mode = null;
+                 graphNode.jimeng_progress_startTime = 0;
+                 graphNode.jimeng_progress_duration = 0;
                  app.graph.setDirtyCanvas(true, false);
              }
         });
@@ -36,15 +52,36 @@ app.registerExtension({
             
             node.onDrawForeground = function(ctx) {
                 if (origOnDrawForeground) origOnDrawForeground.apply(this, arguments);
-                
+
+                if (this.jimeng_progress_mode === "auto" && this.jimeng_progress_startTime) {
+                    const now = performance.now();
+                    const duration = this.jimeng_progress_duration || 1000;
+                    const elapsed = now - this.jimeng_progress_startTime;
+                    const ratio = elapsed / duration;
+
+                    if (ratio >= 1) {
+                        this.jimeng_progress_mode = null;
+                        this.jimeng_progress_startTime = 0;
+                        this.jimeng_progress_duration = 0;
+                        this.jimeng_progress_ratio = 0;
+                        this.jimeng_progress_text = "";
+                    } else if (ratio > 0) {
+                        this.jimeng_progress_ratio = ratio;
+                        this.jimeng_progress_text = `${Math.round(elapsed / 1000)}s / ${Math.round(duration / 1000)}s`;
+                        app.graph.setDirtyCanvas(true, false);
+                    }
+                }
+
                 if (this.jimeng_progress_ratio > 0 && this.jimeng_progress_ratio < 1) {
                     const w = this.size[0];
-                    const titleHeight = 0; // 进度条高度
+                    // 进度条高度
+                    const titleHeight = 0;
                     const barHeight = 4;
                     const barY = titleHeight;
                     
                     const textX = w - 10;
-                    const textY = 0; // 文字高度
+                    // 文字高度
+                    const textY = -14;
 
                     ctx.save();
 
@@ -65,7 +102,7 @@ app.registerExtension({
                     // 绘制文字
                     if (this.jimeng_progress_text) {
                         ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-                        ctx.font = "10px Arial";
+                        ctx.font = "12px Arial";
                         ctx.textAlign = "right";
                         ctx.textBaseline = "middle";
                         ctx.fillText(this.jimeng_progress_text, textX, textY);

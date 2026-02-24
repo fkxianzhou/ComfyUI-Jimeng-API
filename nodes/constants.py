@@ -9,8 +9,10 @@ MAX_GENERATION_COUNT = 2048
 # 图像分辨率常量
 MIN_IMAGE_PIXELS_DEFAULT = 512 * 512
 MAX_IMAGE_PIXELS_DEFAULT = 2048 * 2048
-MIN_IMAGE_PIXELS_V4_5 = 3686400  # 2560x1440
+MIN_IMAGE_PIXELS_V4_5 = 3686400
 MAX_IMAGE_PIXELS_V4 = 4096 * 4096
+MIN_IMAGE_PIXELS_V5 = 3686400
+MAX_IMAGE_PIXELS_V5 = 10404496
 MIN_ASPECT_RATIO = 1.0 / 16.0
 MAX_ASPECT_RATIO = 16.0
 
@@ -48,7 +50,7 @@ LOG_TRANSLATIONS = {
         "api_file_empty": "警告: 'api_keys.json' 为空或格式不正确。",
         "api_load_error": "错误: 加载 'api_keys.json' 失败: {e}",
         "api_key_not_found": "错误: 未找到 '{key_name}' 的 API Key，请检查配置文件。",
-        "est_fallback": "默认兜底",
+        "est_fallback": "默认值",
         "est_history": "历史均值",
         "est_regression": "线性回归",
         "est_recent": "近期负载调整",
@@ -81,6 +83,8 @@ LOG_TRANSLATIONS = {
         "err_copy_fail": "复制文件失败: {path}，错误: {e}",
         "err_convert_tensor": "转换图片 Tensor 失败: {e}",
         "err_check_status_batch": "检查非阻塞任务状态失败: {e}",
+        "err_task_fail_ignored": "⚠️ 节点 {node_id} 任务失败 (并发模式已忽略): {msg}",
+        "debug_node_count": "调试: 检测到 {count} 个 {type} 节点。",
         "download_retry": "警告: 下载失败 (尝试 {attempt}/{total})。{delay}秒后重试... 错误: {e}",
         
         # 流式生成
@@ -98,7 +102,7 @@ LOG_TRANSLATIONS = {
         "popup_prepare_failed": "任务准备失败: {e}",
 
         # 图片节点
-        "err_pixels_range": "参数错误: 总像素数必须在 {min} ({min_desc}) 和 {max} ({max_desc}) 之间。当前值: {current}",
+        "err_pixels_range": "参数错误: 总像素数必须在 {min} 和 {max} 之间。当前值: {current}",
         "err_aspect_ratio": "参数错误: 宽高比必须在 {min} 和 {max} 之间。当前值: {current}",
         "err_download_img": "错误: 下载生成的图像失败。",
         "err_gen_model": "模型 {model} 生成失败: {e}",
@@ -189,6 +193,8 @@ LOG_TRANSLATIONS = {
         "err_copy_fail": "Failed to copy file: {path}. Error: {e}",
         "err_convert_tensor": "Failed to convert frame to tensor: {e}",
         "err_check_status_batch": "API Error checking batch status: {e}",
+        "err_task_fail_ignored": "⚠️ Node {node_id} task failed (Ignored in concurrent mode): {msg}",
+        "debug_node_count": "Debug: Detected {count} {type} nodes.",
         "download_retry": "Warning: Download failed (Attempt {attempt}/{total}). Retrying in {delay}s... Error: {e}",
         "stream_recv_image": "Streaming: Image {index} generated, downloading in background...",
         "stream_partial_fail": "Streaming Warning: Image {index} failed: {msg}",
@@ -200,7 +206,7 @@ LOG_TRANSLATIONS = {
         "popup_first_frame_missing": "Parameter Error: A first frame image must be provided when using a last frame image.",
         "popup_ref_missing": "Parameter Error: At least one reference image must be provided.",
         "popup_prepare_failed": "Failed to prepare task: {e}",
-        "err_pixels_range": "Parameter Error: Total pixels must be between {min} ({min_desc}) and {max} ({max_desc}). Your current: {current}",
+        "err_pixels_range": "Parameter Error: Total pixels must be between {min} and {max}. Your current: {current}",
         "err_aspect_ratio": "Parameter Error: Aspect ratio must be between {min} and {max}. Your current: {current}",
         "err_download_img": "Error: Failed to download the generated image.",
         "err_gen_model": "Failed to generate image with model {model}: {e}",

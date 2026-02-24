@@ -7,6 +7,7 @@ import aiohttp
 import json
 import math
 import logging
+import base64
 
 import folder_paths
 import comfy.model_management
@@ -26,6 +27,9 @@ from .nodes_shared import (
     format_api_error,
     JimengClientType,
     JimengException,
+    get_node_count_in_workflow,
+    create_white_image_tensor,
+    create_white_video_file,
 )
 from .nodes_video_schema import (
     get_common_video_inputs,
@@ -36,8 +40,9 @@ from .nodes_video_schema import (
     ASPECT_RATIOS,
     resolve_model_id,
     resolve_query_models,
-    VIDEO_UI_OPTIONS,
+    VIDEO_1_UI_OPTIONS,
     VIDEO_1_5_UI_OPTIONS,
+    VIDEO_2_UI_OPTIONS,
     QUERY_TASKS_MODEL_LIST,
     REF_IMG_2_VIDEO_MODEL_ID,
 )
@@ -253,6 +258,8 @@ class JimengVideoBase:
         extra_api_params=None,
         return_last_frame=True,
         on_tasks_created=None,
+        node_class_type=None,
+        workflow_prompt=None,
     ):
         """
         通用的视频生成逻辑。
@@ -271,9 +278,12 @@ class JimengVideoBase:
             if extra_api_params is None:
                 extra_api_params = {}
 
-            extra_api_params["resolution"] = resolution
-            extra_api_params["ratio"] = aspect_ratio
-            extra_api_params["seed"] = api_seed
+            if resolution is not None:
+                extra_api_params["resolution"] = resolution
+            if aspect_ratio is not None:
+                extra_api_params["ratio"] = aspect_ratio
+            if api_seed is not None:
+                extra_api_params["seed"] = api_seed
 
             estimation_duration = 5
             if is_auto_duration:
@@ -289,7 +299,7 @@ class JimengVideoBase:
             
             est_tokens_per_video = QuotaManager.instance().estimate_video_tokens(
                 model_name,
-                width=1, height=est_pixels, # pixels product
+                width=1, height=est_pixels,
                 duration=estimation_duration,
                 fps=VIDEO_FRAME_RATE,
                 has_audio=has_audio,
@@ -300,7 +310,13 @@ class JimengVideoBase:
             content.insert(0, {"type": "text", "text": prompt})
             comfy.model_management.throw_exception_if_processing_interrupted()
 
-            runner = JimengBatchTaskRunner(client, node_id)
+            ignore_errors = False
+            if node_class_type:
+                node_count = get_node_count_in_workflow(node_class_type, prompt=workflow_prompt)
+                # log_msg("debug_node_count", count=node_count, type=node_class_type)
+                ignore_errors = node_count > 1
+
+            runner = JimengBatchTaskRunner(client, node_id, ignore_errors=ignore_errors)
             successful_tasks = await runner.run_batch(
                 model_name=model_name,
                 content=content,
@@ -315,6 +331,15 @@ class JimengVideoBase:
                 return_last_frame=return_last_frame,
                 on_tasks_created=on_tasks_created,
             )
+
+            if not successful_tasks and ignore_errors:
+                 dummy_video = None
+                 dummy_video_path = create_white_video_file(filename_prefix, 1024, 1024)
+                 if dummy_video_path and os.path.exists(dummy_video_path):
+                     dummy_video = VideoFromFile(dummy_video_path)
+                 
+                 dummy_frame = create_white_image_tensor(1024, 1024)
+                 return comfy_io.NodeOutput(dummy_video, dummy_frame, json.dumps({"error": "All tasks failed but ignored. Returning dummy video/image."}))
 
             ret_results = None
             async with aiohttp.ClientSession() as session:
@@ -367,8 +392,8 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
                 JimengClientType.Input("client"),
                 comfy_io.Combo.Input(
                     "model_version",
-                    options=VIDEO_UI_OPTIONS,
-                    default=VIDEO_UI_OPTIONS[0],
+                    options=VIDEO_1_UI_OPTIONS,
+                    default=VIDEO_1_UI_OPTIONS[0],
                 ),
                 comfy_io.String.Input("prompt", multiline=True, default=""),
                 get_duration_input(
@@ -383,7 +408,7 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Image.Input("image", optional=True),
                 comfy_io.Image.Input("last_frame_image", optional=True),
             ],
-            hidden=[comfy_io.Hidden.unique_id],
+            hidden=[comfy_io.Hidden.unique_id, comfy_io.Hidden.prompt],
             outputs=[
                 comfy_io.Video.Output(display_name="video"),
                 comfy_io.Image.Output(display_name="last_frame"),
@@ -461,6 +486,8 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
             service_tier=service_tier,
             execution_expires_after=execution_expires_after,
             enable_random_seed=enable_random_seed,
+            node_class_type="JimengSeedance1",
+            workflow_prompt=cls.hidden.prompt,
         )
 
 
@@ -499,7 +526,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Image.Input("image", optional=True),
                 comfy_io.Image.Input("last_frame_image", optional=True),
             ],
-            hidden=[comfy_io.Hidden.unique_id],
+            hidden=[comfy_io.Hidden.unique_id, comfy_io.Hidden.prompt],
             outputs=[
                 comfy_io.Video.Output(display_name="video"),
                 comfy_io.Image.Output(display_name="last_frame"),
@@ -582,6 +609,10 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             enable_offline_inference, timeout_seconds
         )
 
+        node_count = get_node_count_in_workflow("JimengSeedance1_5", prompt=cls.hidden.prompt)
+        # log_msg("debug_node_count", count=node_count, type="JimengSeedance1_5")
+        ignore_errors = node_count > 1
+
         if content_for_reuse:
             extra_params = {
                 "resolution": resolution,
@@ -589,7 +620,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
 
             estimation_duration = 5 if auto_duration else float(duration)
 
-            runner = JimengBatchTaskRunner(client, node_id)
+            runner = JimengBatchTaskRunner(client, node_id, ignore_errors=ignore_errors)
             successful_tasks = await runner.run_batch(
                 model_name=final_model_name,
                 content=content_for_reuse,
@@ -603,6 +634,15 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
                 extra_api_params=extra_params,
                 return_last_frame=True,
             )
+
+            if not successful_tasks and ignore_errors:
+                 dummy_video = None
+                 dummy_video_path = create_white_video_file(filename_prefix, 1024, 1024)
+                 if dummy_video_path and os.path.exists(dummy_video_path):
+                     dummy_video = VideoFromFile(dummy_video_path)
+                 
+                 dummy_frame = create_white_image_tensor(1024, 1024)
+                 return comfy_io.NodeOutput(dummy_video, dummy_frame, json.dumps({"error": "All tasks failed but ignored. Returning dummy video/image."}))
 
             ret_results = None
             async with aiohttp.ClientSession(
@@ -685,6 +725,8 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
             extra_api_params=extra_api_params,
             return_last_frame=should_return_last_frame,
             on_tasks_created=_on_tasks_created,
+            node_class_type="JimengSeedance1_5",
+            workflow_prompt=cls.hidden.prompt,
         )
 
         return result
@@ -718,7 +760,7 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
                 comfy_io.Image.Input("ref_image_3", optional=True),
                 comfy_io.Image.Input("ref_image_4", optional=True),
             ],
-            hidden=[comfy_io.Hidden.unique_id],
+            hidden=[comfy_io.Hidden.unique_id, comfy_io.Hidden.prompt],
             outputs=[
                 comfy_io.Video.Output(display_name="video"),
                 comfy_io.Image.Output(display_name="last_frame"),
@@ -782,7 +824,67 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
             service_tier=service_tier,
             execution_expires_after=execution_expires_after,
             enable_random_seed=enable_random_seed,
+            node_class_type="JimengReferenceImage2Video",
+            workflow_prompt=cls.hidden.prompt,
         )
+
+
+class JimengProgressTest(comfy_io.ComfyNode):
+    """
+    Jimeng 进度条测试节点。
+    不调用任何远程 API，只本地模拟进度事件，方便调试前端样式。
+    """
+    @classmethod
+    def define_schema(cls) -> comfy_io.Schema:
+        return comfy_io.Schema(
+            node_id="JimengProgressTest",
+            display_name="Jimeng Progress Test",
+            category=GLOBAL_CATEGORY,
+            is_output_node=True,
+            inputs=[
+                comfy_io.Int.Input("duration_seconds", default=10, min=1, max=300),
+                comfy_io.Int.Input("steps", default=20, min=1, max=600),
+            ],
+            hidden=[comfy_io.Hidden.unique_id],
+            outputs=[
+                comfy_io.Video.Output(display_name="video"),
+                comfy_io.Image.Output(display_name="last_frame"),
+                comfy_io.String.Output(display_name="response"),
+            ],
+        )
+
+    @classmethod
+    async def execute(
+        cls,
+        duration_seconds,
+        steps,
+    ) -> comfy_io.NodeOutput:
+        node_id = cls.hidden.unique_id
+        ps_instance = PromptServer.instance
+
+        total_seconds = max(1, int(duration_seconds))
+        total_steps = max(1, int(steps))
+        step_interval = float(total_seconds) / float(total_steps)
+
+        elapsed = 0.0
+        for i in range(total_steps + 1):
+            comfy.model_management.throw_exception_if_processing_interrupted()
+
+            if ps_instance and node_id:
+                ps_instance.send_sync(
+                    "progress",
+                    {
+                        "value": int(elapsed),
+                        "max": int(total_seconds),
+                        "node": node_id,
+                    },
+                )
+
+            if i < total_steps:
+                await asyncio.sleep(step_interval)
+                elapsed += step_interval
+
+        return comfy_io.NodeOutput(None, None, "Jimeng Progress Test Finished")
 
 
 class JimengVideoQueryTasks(comfy_io.ComfyNode):

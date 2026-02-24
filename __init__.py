@@ -90,8 +90,8 @@ if sys.platform == 'win32':
 from comfy_api.latest import ComfyExtension
 
 from .nodes.nodes_shared import JimengAPIClient
-from .nodes.nodes_image import JimengSeedream3, JimengSeedream4
-from .nodes.nodes_video import JimengSeedance1, JimengSeedance1_5,JimengReferenceImage2Video, JimengVideoQueryTasks
+from .nodes.nodes_image import JimengSeedream3, JimengSeedream4, JimengSeedream5
+from .nodes.nodes_video import JimengSeedance1, JimengSeedance1_5, JimengReferenceImage2Video, JimengVideoQueryTasks, JimengProgressTest
 from .nodes.quota import JimengQuotaSettings
 
 def get_init_text(key, **kwargs):
@@ -122,8 +122,8 @@ def check_and_update_dependencies():
     如果未安装或版本过低，将尝试自动安装/更新。
     """
     package_name = "volcengine-python-sdk"
-    install_spec = "volcengine-python-sdk[ark]>=5.0.6"
-    min_version = "5.0.6"
+    install_spec = "volcengine-python-sdk[ark]>=5.0.9"
+    min_version = "5.0.9"
 
     try:
         current_version = importlib.metadata.version(package_name)
@@ -168,10 +168,12 @@ class JimengExtension(ComfyExtension):
             JimengAPIClient,
             JimengSeedream3,
             JimengSeedream4,
+            JimengSeedream5,
             JimengSeedance1,
             JimengSeedance1_5,
             JimengReferenceImage2Video,
             JimengVideoQueryTasks,
+            #JimengProgressTest,
             JimengQuotaSettings,
         ]
 

@@ -2,8 +2,9 @@ from comfy_api.latest import io as comfy_io
 from .nodes_shared import JimengClientType, get_text, JimengException
 from .models_config import (
     VIDEO_MODEL_MAP,
-    VIDEO_UI_OPTIONS,
+    VIDEO_1_UI_OPTIONS,
     VIDEO_1_5_UI_OPTIONS,
+    VIDEO_2_UI_OPTIONS,
     QUERY_TASKS_MODEL_LIST,
     REF_IMG_2_VIDEO_MODEL_ID,
 )

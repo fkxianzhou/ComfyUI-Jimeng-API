@@ -6,6 +6,7 @@ import logging
 import comfy.model_management
 from server import PromptServer
 from .nodes_shared import log_msg, format_api_error, get_text, JimengException
+from .models_config import VIDEO_MODEL_MAP, VIDEO_2_UI_OPTIONS
 
 DEFAULT_FALLBACK_PER_SEC = 12
 DEFAULT_FALLBACK_BASE = 20
@@ -22,7 +23,21 @@ async def _get_api_estimated_time_async(
     异步获取 API 预估耗时。
     通过分析历史任务数据，使用均值、线性回归或近期负载调整来估算任务完成时间。
     """
-    fallback_time = (int(duration) * DEFAULT_FALLBACK_PER_SEC) + DEFAULT_FALLBACK_BASE
+    fallback_per_sec = DEFAULT_FALLBACK_PER_SEC
+
+    v2_model_ids = set(VIDEO_2_UI_OPTIONS)
+    for m in VIDEO_2_UI_OPTIONS:
+        if m in VIDEO_MODEL_MAP:
+            v2_model_ids.add(VIDEO_MODEL_MAP[m])
+
+    if model_name in v2_model_ids:
+        fallback_per_sec = 60
+    elif resolution == "720p":
+        fallback_per_sec = 6
+    elif resolution == "480p":
+        fallback_per_sec = 2
+
+    fallback_time = (int(duration) * fallback_per_sec) + DEFAULT_FALLBACK_BASE
     try:
         resp = await asyncio.to_thread(
             ark_client.content_generation.tasks.list,
@@ -142,9 +157,10 @@ class JimengBatchTaskRunner:
     Jimeng 批量任务运行器。
     负责批量提交任务、轮询状态、处理进度条、异常处理以及非阻塞执行支持。
     """
-    def __init__(self, client, node_id=None):
+    def __init__(self, client, node_id=None, ignore_errors=False):
         self.client = client
         self.node_id = node_id
+        self.ignore_errors = ignore_errors
         self.ark_client = client.ark
         self.ps_instance = PromptServer.instance
 
@@ -168,6 +184,18 @@ class JimengBatchTaskRunner:
             )
         else:
             display_msg = get_text("popup_req_failed").format(msg=clean_msg)
+        
+        if self.ignore_errors:
+            clean_display_msg = display_msg
+            if clean_display_msg.startswith("[JimengAI] "):
+                clean_display_msg = clean_display_msg[11:].strip()
+            
+            if clean_display_msg.startswith("[JimengAI] "):
+                clean_display_msg = clean_display_msg[11:].strip()
+
+            log_msg("err_task_fail_ignored", node_id=self.node_id or "N/A", msg=clean_display_msg)
+            return
+            
         raise JimengException(display_msg)
 
     def _create_pending_json(self, status, task_id=None, task_count=0):
@@ -207,7 +235,6 @@ class JimengBatchTaskRunner:
         cached_data = non_blocking_cache_dict.get(node_id)
 
         if non_blocking and cached_data:
-            # 处理非阻塞模式下的状态检查
             task_ids = cached_data["task_ids"]
             log_msg("check_status", count=len(task_ids))
             try:
@@ -260,7 +287,7 @@ class JimengBatchTaskRunner:
                             self._create_failure_json(first_msg, task_id=first_tid)
                         else:
                             self._create_failure_json(
-                                "Batch failed: No tasks succeeded."
+                                get_text("err_batch_fail_all")
                             )
                     
                     return successful_tasks
@@ -333,18 +360,19 @@ class JimengBatchTaskRunner:
                 created=created_count,
                 failed=failed_count,
             )
-            if failed_count > 0:
+            if failed_count > 0 and created_count > 0:
                 log_msg("batch_failed_summary", count=failed_count)
                 for err_msg, count in creation_error_counts.items():
                     log_msg("batch_failed_reason", msg=err_msg, count=count)
 
         if not tasks_to_poll:
-            if generation_count > 1:
-                log_msg("err_batch_fail_all")
-            final_error_msg = "All tasks failed on creation."
+            # if generation_count > 1:
+            #    log_msg("err_batch_fail_all")
+            final_error_msg = get_text("err_batch_fail_all")
             if creation_errors:
                 final_error_msg = format_api_error(creation_errors[0])
             self._create_failure_json(final_error_msg)
+            return []
 
         if on_tasks_created:
             try:
@@ -352,21 +380,31 @@ class JimengBatchTaskRunner:
             except Exception as e:
                 log_msg("err_on_tasks_created", e=e)
 
-        if non_blocking:
-            task_ids = [t.id for t in tasks_to_poll]
-            non_blocking_cache_dict[node_id] = {"task_ids": task_ids}
-            self._create_pending_json("submitted", task_ids[0], len(task_ids))
-
         estimated_single_task_time, method_key = await _get_api_estimated_time_async(
             ark_client, model_name, estimation_duration, resolution
         )
         if estimated_single_task_time <= 0:
             estimated_single_task_time = 1
 
+        if non_blocking:
+            task_ids = [t.id for t in tasks_to_poll]
+            non_blocking_cache_dict[node_id] = {"task_ids": task_ids}
+            if node_id and ps_instance:
+                ps_instance.send_sync(
+                    "jimeng_fake_progress",
+                    {
+                        "value": 0,
+                        "max": estimated_single_task_time,
+                        "node": node_id,
+                    },
+                )
+            self._create_pending_json("submitted", task_ids[0], len(task_ids))
+
         method_name = get_text(method_key)
-        log_msg(
-            "task_submitted_est", time=estimated_single_task_time, method=method_name
-        )
+        if tasks_to_poll:
+            log_msg(
+                "task_submitted_est", time=estimated_single_task_time, method=method_name
+            )
 
         if generation_count == 1 and tasks_to_poll:
             log_msg("task_info_simple", task_id=tasks_to_poll[0].id, model=model_name)
@@ -375,6 +413,9 @@ class JimengBatchTaskRunner:
         max_concurrency_seen = 0
         running_task_start_times = {}
         last_loop_time = time.time()
+        extra_tail_seconds = poll_interval
+        extended_est_total = estimated_single_task_time + extra_tail_seconds
+        extended_est_applied = False
 
         successful_tasks = []
         failed_tasks_info = []
@@ -454,25 +495,40 @@ class JimengBatchTaskRunner:
                 if running_count > 0:
                     accumulated_running_time += loop_delta
 
-                    running_remainings = []
-                    for tid in current_running_ids:
-                        start_ts = running_task_start_times.get(tid, now)
-                        elapsed_for_task = now - start_ts
-                        rem = max(1.0, estimated_single_task_time - elapsed_for_task)
-                        running_remainings.append(rem)
+                    if generation_count == 1:
+                        if not extended_est_applied:
+                            current_max = int(estimated_single_task_time)
+                            if accumulated_running_time >= 0.95 * estimated_single_task_time:
+                                extended_est_applied = True
+                        if extended_est_applied:
+                            if accumulated_running_time > extended_est_total:
+                                extended_est_total = accumulated_running_time + extra_tail_seconds
+                            current_max = int(extended_est_total)
+                        else:
+                            if accumulated_running_time > current_max:
+                                current_max = int(accumulated_running_time)
+                    else:
+                        running_remainings = []
+                        for tid in current_running_ids:
+                            start_ts = running_task_start_times.get(tid, now)
+                            elapsed_for_task = now - start_ts
+                            rem = max(
+                                1.0, estimated_single_task_time - elapsed_for_task
+                            )
+                            running_remainings.append(rem)
 
-                    max_running_rem = (
-                        max(running_remainings)
-                        if running_remainings
-                        else estimated_single_task_time
-                    )
-                    effective_concurrency = max(max_concurrency_seen, 1)
-                    queue_est_time = (
-                        current_queued_count * estimated_single_task_time
-                    ) / effective_concurrency
+                        max_running_rem = (
+                            max(running_remainings)
+                            if running_remainings
+                            else estimated_single_task_time
+                        )
+                        effective_concurrency = max(max_concurrency_seen, 1)
+                        queue_est_time = (
+                            current_queued_count * estimated_single_task_time
+                        ) / effective_concurrency
 
-                    future_est = max_running_rem + queue_est_time
-                    current_max = int(accumulated_running_time + future_est)
+                        future_est = max_running_rem + queue_est_time
+                        current_max = int(accumulated_running_time + future_est)
 
                     if node_id and ps_instance:
                         ps_instance.send_sync(
@@ -610,6 +666,6 @@ class JimengBatchTaskRunner:
                 first_tid, first_msg = failed_tasks_info[0]
                 self._create_failure_json(first_msg, task_id=first_tid)
             else:
-                self._create_failure_json("Batch failed: No tasks succeeded.")
+                self._create_failure_json(get_text("err_batch_fail_all"))
         
         return successful_tasks
