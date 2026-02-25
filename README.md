@@ -1,12 +1,14 @@
-# ComfyUI 即梦 AI 节点
+# ComfyUI 即梦 API 节点
 
 本项目为 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 提供了火山方舟的视觉模型（即梦/豆包） API 节点。用户可以通过这些节点在 ComfyUI 中使用多种图像生成和视频生成功能。
 
-*项目目前已重构为 V3 架构，可能存在未知的 BUG。如在使用过程中遇到问题，请通过 [ISSUES](https://github.com/fkxianzhou/ComfyUI-Jimeng-API/issues) 反馈。
+* `doubao-seedance-2.0` 模型因火山方舟推迟开放 API 接口暂无适配计划。
 
-*暂不支持 ComfyUI 的 Nodes 2.0 新版 UI，如遇到显示异常：
- 1.  点击左侧/顶部 ComfyUI 图标 打开菜单。
- 2.  找到并关闭 Nodes 2.0 选项，切换回传统界面。
+* 项目目前已重构为 V3 架构，可能存在未知的 BUG。如在使用过程中遇到问题，请通过 [ISSUES](https://github.com/fkxianzhou/ComfyUI-Jimeng-API/issues) 反馈。
+
+* 暂不支持 ComfyUI 的 Nodes 2.0 新版 UI，如遇到显示异常：
+  1.  点击左侧/顶部 ComfyUI 图标 打开菜单。
+  2.  找到并关闭 Nodes 2.0 选项，切换回传统界面。
 
 ## ✨ 项目特性
 
@@ -49,7 +51,8 @@
   - `Jimeng 配额设置`: 用于设置图像和视频生成的配额限制，防止意外消耗过多资源。
 - **图像生成**:
   - `图像生成（Seedream 3）`: 支持**文生图**和**图生图**模式的基础生成节点。
-  - `图像生成（Seedream 4）`: 高级图像生成节点，支持**组图生成**、多图输入及最新的 4.5 模型。
+  - `图像生成（Seedream 4）`: 高级图像生成节点，支持多图输入、**组图生成**以及 4.5 模型。
+  - `图像生成（Seedream 5）`: 最新一代图像生成节点，支持多图输入、组图生成以及**联网搜索**。
 - **视频生成**:
   - `视频生成（Seedance 1.0）`: 核心视频生成节点，支持文生视频、图生视频（首/尾帧）。
   - `视频生成（Seedance 1.5 Pro）`: 支持**音频生成**和**智能时长**的高级视频生成节点。
@@ -73,7 +76,6 @@
 
 ### `图像生成（Seedream 3）`
 - **模式**: 不连接 `输入图像` 为文生图，连接则为图生图。
-- **特性**: 支持自定义尺寸，支持引导系数调节。
 
 **示例工作流**:
 ![Seedream 3 Workflow](example_workflows/Seedream%203.jpg)
@@ -81,12 +83,23 @@
 ---
 
 ### `图像生成（Seedream 4）`
-支持最新的 `doubao-seedream-4.5`。
-- **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
+支持 `doubao-seedream-4.5`。
 - **输入图像**: 支持单张或多张（Batch）图像作为参考。
+- **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
 
 **示例工作流**:
 ![Seedream 4 Workflow](example_workflows/Seedream%204.jpg)
+
+---
+
+### `图像生成（Seedream 5）`
+支持最新的 `doubao-seedream-5.0-lite`。
+- **输入图像**: 支持单张或多张（Batch）图像作为参考。
+- **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
+- **联网搜索**: 开启后模型可自主搜索互联网内容（如实时信息、商品等）辅助生成。
+
+**示例工作流**:
+![Seedream 5 Workflow](example_workflows/Seedream%205.jpg)
 
 ---
 
