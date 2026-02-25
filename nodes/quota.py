@@ -123,7 +123,7 @@ class QuotaManager:
 
 from comfy_api.latest import io as comfy_io
 from .nodes_shared import GLOBAL_CATEGORY, JimengClientType
-from .models_config import SEEDREAM_4_MODEL_MAP, VIDEO_MODEL_MAP, SEEDREAM_3_MODELS
+from .models_config import SEEDREAM_4_MODEL_MAP, VIDEO_MODEL_MAP, SEEDREAM_3_MODELS, SEEDREAM_5_MODEL_MAP
 
 class JimengQuotaSettings(comfy_io.ComfyNode):
     """
@@ -131,7 +131,7 @@ class JimengQuotaSettings(comfy_io.ComfyNode):
     用于设置图像和视频生成的配额限制。
     """
     
-    IMAGE_MODELS = ["None"] + list(SEEDREAM_4_MODEL_MAP.keys()) + ["doubao-seedream-3.0-t2i", "doubao-seedream-3.0-i2i"]
+    IMAGE_MODELS = ["None"] + list(SEEDREAM_5_MODEL_MAP.keys()) + list(SEEDREAM_4_MODEL_MAP.keys()) + ["doubao-seedream-3.0-t2i", "doubao-seedream-3.0-i2i"]
     VIDEO_MODELS = ["None"] + list(VIDEO_MODEL_MAP.keys())
 
     @classmethod
@@ -170,7 +170,7 @@ class JimengQuotaSettings(comfy_io.ComfyNode):
         manager = QuotaManager.instance()
         
         if image_model != "None":
-            real_image_model = SEEDREAM_4_MODEL_MAP.get(image_model, image_model)
+            real_image_model = SEEDREAM_5_MODEL_MAP.get(image_model, SEEDREAM_4_MODEL_MAP.get(image_model, image_model))
             
             if image_model == "doubao-seedream-3.0-t2i":
                 real_image_model = SEEDREAM_3_MODELS["t2i"]

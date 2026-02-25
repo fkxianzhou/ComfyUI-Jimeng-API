@@ -52,7 +52,12 @@ from .utils_download import (
     save_to_output,
 )
 
-from .task_runner import JimengBatchTaskRunner
+from .executor import (
+    JimengGenerationExecutor,
+    _get_api_estimated_time_async,
+    HISTORY_PAGE_SIZE,
+)
+from .models_config import VIDEO_MODEL_MAP
 
 logging.getLogger("volcenginesdkarkruntime").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -316,8 +321,8 @@ class JimengVideoBase:
                 # log_msg("debug_node_count", count=node_count, type=node_class_type)
                 ignore_errors = node_count > 1
 
-            runner = JimengBatchTaskRunner(client, node_id, ignore_errors=ignore_errors)
-            successful_tasks = await runner.run_batch(
+            runner = JimengGenerationExecutor(client, node_id, ignore_errors=ignore_errors)
+            successful_tasks = await runner.run_batch_tasks(
                 model_name=model_name,
                 content=content,
                 estimation_duration=estimation_duration,
@@ -620,8 +625,8 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
 
             estimation_duration = 5 if auto_duration else float(duration)
 
-            runner = JimengBatchTaskRunner(client, node_id, ignore_errors=ignore_errors)
-            successful_tasks = await runner.run_batch(
+            runner = JimengGenerationExecutor(client, node_id, ignore_errors=ignore_errors)
+            successful_tasks = await runner.run_batch_tasks(
                 model_name=final_model_name,
                 content=content_for_reuse,
                 estimation_duration=estimation_duration,
@@ -836,6 +841,15 @@ class JimengProgressTest(comfy_io.ComfyNode):
     """
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
+        test_model_options = ["None"]
+        for opt in VIDEO_1_UI_OPTIONS:
+            if opt == "doubao-seedance-1-0-lite":
+                test_model_options.append("doubao-seedance-1-0-lite-t2v")
+                test_model_options.append("doubao-seedance-1-0-lite-i2v")
+            else:
+                test_model_options.append(opt)
+        test_model_options.extend(VIDEO_1_5_UI_OPTIONS)
+
         return comfy_io.Schema(
             node_id="JimengProgressTest",
             display_name="Jimeng Progress Test",
@@ -844,11 +858,20 @@ class JimengProgressTest(comfy_io.ComfyNode):
             inputs=[
                 comfy_io.Int.Input("duration_seconds", default=10, min=1, max=300),
                 comfy_io.Int.Input("steps", default=20, min=1, max=600),
+                JimengClientType.Input("client", optional=True),
+                comfy_io.Combo.Input(
+                    "test_model",
+                    options=test_model_options,
+                    default="None",
+                ),
+                comfy_io.Combo.Input(
+                    "test_resolution",
+                    options=["720p", "1080p", "480p"],
+                    default="720p",
+                ),
             ],
             hidden=[comfy_io.Hidden.unique_id],
             outputs=[
-                comfy_io.Video.Output(display_name="video"),
-                comfy_io.Image.Output(display_name="last_frame"),
                 comfy_io.String.Output(display_name="response"),
             ],
         )
@@ -858,9 +881,83 @@ class JimengProgressTest(comfy_io.ComfyNode):
         cls,
         duration_seconds,
         steps,
+        client=None,
+        test_model="None",
+        test_resolution="720p",
     ) -> comfy_io.NodeOutput:
         node_id = cls.hidden.unique_id
         ps_instance = PromptServer.instance
+
+        if client and test_model != "None":
+            
+            real_model_id = VIDEO_MODEL_MAP.get(test_model, test_model)
+
+            est_time, method = await _get_api_estimated_time_async(
+                client.ark, real_model_id, duration_seconds, test_resolution
+            )
+
+            history_data = []
+            try:
+                resp = await asyncio.to_thread(
+                    client.ark.content_generation.tasks.list,
+                    status="succeeded",
+                    model=real_model_id,
+                    page_size=HISTORY_PAGE_SIZE,
+                )
+                if resp.items:
+                    for item in resp.items:
+                        if not (
+                            hasattr(item, "resolution")
+                            and item.resolution == test_resolution
+                        ):
+                            continue
+
+                        item_dur = getattr(item, "duration", 0)
+
+                        t_start = item.created_at
+                        t_end = item.updated_at
+                        if hasattr(t_start, "timestamp"):
+                            t_start = t_start.timestamp()
+                        if hasattr(t_end, "timestamp"):
+                            t_end = t_end.timestamp()
+
+                        raw_diff = float(t_end) - float(t_start)
+                        try:
+                            local_offset = (
+                                datetime.datetime.now()
+                                .astimezone()
+                                .utcoffset()
+                                .total_seconds()
+                            )
+                        except Exception:
+                            local_offset = 0
+
+                        fixed_diff = raw_diff - local_offset
+                        task_time = (
+                            fixed_diff
+                            if fixed_diff > 0 and abs(fixed_diff) < abs(raw_diff)
+                            else raw_diff
+                        )
+
+                        history_data.append(
+                            {
+                                "task_id": item.id,
+                                "req_duration": item_dur,
+                                "actual_time": float(f"{task_time:.2f}"),
+                                "raw_diff": float(f"{raw_diff:.2f}"),
+                            }
+                        )
+            except Exception as e:
+                history_data.append({"error": str(e)})
+
+            result = {
+                "estimated_time": est_time,
+                "estimation_method": method,
+                "history_samples_count": len(history_data),
+                "history_samples_top20": history_data[:20],
+            }
+
+            return comfy_io.NodeOutput(json.dumps(result, indent=2))
 
         total_seconds = max(1, int(duration_seconds))
         total_steps = max(1, int(steps))
@@ -884,7 +981,7 @@ class JimengProgressTest(comfy_io.ComfyNode):
                 await asyncio.sleep(step_interval)
                 elapsed += step_interval
 
-        return comfy_io.NodeOutput(None, None, "Jimeng Progress Test Finished")
+        return comfy_io.NodeOutput("Jimeng Progress Test Finished")
 
 
 class JimengVideoQueryTasks(comfy_io.ComfyNode):

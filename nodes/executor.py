@@ -3,10 +3,16 @@ import time
 import math
 import datetime
 import logging
+import json
+import aiohttp
+import torch
+import random
+
 import comfy.model_management
 from server import PromptServer
-from .nodes_shared import log_msg, format_api_error, get_text, JimengException
+from .nodes_shared import log_msg, format_api_error, get_text, JimengException, create_white_image_tensor, create_white_video_file
 from .models_config import VIDEO_MODEL_MAP, VIDEO_2_UI_OPTIONS
+from .utils_download import download_url_to_image_tensor_async
 
 DEFAULT_FALLBACK_PER_SEC = 12
 DEFAULT_FALLBACK_BASE = 20
@@ -152,16 +158,18 @@ async def _get_api_estimated_time_async(
     except Exception:
         return (fallback_time, "est_fallback")
 
-class JimengBatchTaskRunner:
+class JimengGenerationExecutor:
     """
-    Jimeng 批量任务运行器。
-    负责批量提交任务、轮询状态、处理进度条、异常处理以及非阻塞执行支持。
+    统一的 Jimeng 生成任务执行器。
+    支持：
+    1. 异步任务模式 (Async Task): 适用于视频生成 (提交 -> 轮询 -> 结果)
+    2. 并行直接模式 (Parallel Direct): 适用于图像生成 (并发请求 -> 结果)
     """
     def __init__(self, client, node_id=None, ignore_errors=False):
         self.client = client
+        self.ark_client = client.ark
         self.node_id = node_id
         self.ignore_errors = ignore_errors
-        self.ark_client = client.ark
         self.ps_instance = PromptServer.instance
 
     def _log_batch_task_failure(self, error_message, task_id=None):
@@ -177,7 +185,7 @@ class JimengBatchTaskRunner:
             clean_msg = clean_msg.strip()[len(prefix) :].strip()
         if clean_msg.startswith("Error:"):
             clean_msg = clean_msg[6:].strip()
-        # print(f"[JimengAI] {clean_msg}")
+        
         if task_id:
             display_msg = get_text("popup_task_failed").format(
                 task_id=task_id, msg=clean_msg
@@ -208,7 +216,7 @@ class JimengBatchTaskRunner:
             msg = get_text("popup_task_pending").format(task_id=task_id, status=status)
         raise JimengException(msg)
 
-    async def run_batch(
+    async def run_batch_tasks(
         self,
         model_name,
         content,
@@ -225,7 +233,7 @@ class JimengBatchTaskRunner:
         on_tasks_created=None,
     ):
         """
-        执行批量生成任务。
+        执行批量生成任务 (Video 模式)。
         包含任务创建、状态轮询、进度估算和异常处理。
         """
         ark_client = self.ark_client
@@ -366,8 +374,6 @@ class JimengBatchTaskRunner:
                     log_msg("batch_failed_reason", msg=err_msg, count=count)
 
         if not tasks_to_poll:
-            # if generation_count > 1:
-            #    log_msg("err_batch_fail_all")
             final_error_msg = get_text("err_batch_fail_all")
             if creation_errors:
                 final_error_msg = format_api_error(creation_errors[0])
@@ -669,3 +675,213 @@ class JimengBatchTaskRunner:
                 self._create_failure_json(get_text("err_batch_fail_all"))
         
         return successful_tasks
+
+    async def run_parallel_requests(
+        self,
+        generation_count,
+        request_func,
+        **kwargs
+    ):
+        """
+        执行并发请求 (Image 模式)。
+        并发调用 request_func，并处理结果。
+        
+        request_func: async function(index, session) -> (result_tensor, result_metadata)
+        """
+        async with aiohttp.ClientSession() as session:
+            tasks = [request_func(i, session) for i in range(generation_count)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        valid_results = []
+        error_counts = {}
+        first_exception = None
+
+        for res in results:
+            if isinstance(res, Exception):
+                if isinstance(res, comfy.model_management.InterruptProcessingException):
+                    raise res
+
+                msg = str(res)
+                prefix = "[JimengAI] "
+                if msg.startswith(prefix):
+                    msg = msg[len(prefix) :]
+
+                error_counts[msg] = error_counts.get(msg, 0) + 1
+                if first_exception is None:
+                    first_exception = res
+            else:
+                valid_results.append(res)
+
+        if generation_count > 1:
+            log_msg(
+                "batch_finished_stats",
+                success=len(valid_results),
+                failed=sum(error_counts.values()),
+            )
+            if error_counts:
+                log_msg("batch_failed_summary", count=sum(error_counts.values()))
+                for msg, count in error_counts.items():
+                    log_msg("batch_failed_reason", msg=msg, count=count)
+
+        if not valid_results:
+            if self.ignore_errors:
+                 return [], []
+
+            if generation_count > 1:
+                log_msg("err_batch_fail_all")
+            if first_exception:
+                raise first_exception
+            raise JimengException(get_text("err_batch_fail_all"))
+
+        valid_results.sort(key=lambda x: x[1].get("batch_index", 0))
+        
+        tensors = [r[0] for r in valid_results]
+        metadata = [r[1] for r in valid_results]
+        
+        return tensors, metadata
+
+    async def stream_generation_helper(
+        self,
+        session,
+        ark_client,
+        kwargs,
+        idx,
+        enable_group_generation,
+        generation_count,
+    ):
+        """
+        处理流式 API 请求和响应 (Image 模式)。
+        """
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _producer_thread():
+            try:
+                kwargs["stream"] = True
+                stream = ark_client.images.generate(**kwargs)
+
+                for event in stream:
+                    if event is None:
+                        continue
+
+                    if event.type == "image_generation.partial_succeeded":
+                        if event.error is None and event.url:
+                            data = {
+                                "type": "url",
+                                "url": event.url,
+                                "index": event.image_index + 1,
+                                "size": getattr(event, "size", None),
+                            }
+                            loop.call_soon_threadsafe(queue.put_nowait, data)
+
+                    elif event.type == "image_generation.partial_failed":
+                        error_msg = (
+                            event.error.message if event.error else "Unknown Error"
+                        )
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            {
+                                "type": "log",
+                                "key": "stream_partial_fail",
+                                "kwargs": {
+                                    "index": event.image_index + 1,
+                                    "msg": error_msg,
+                                },
+                            },
+                        )
+                        if (
+                            event.error
+                            and hasattr(event.error, "code")
+                            and event.error.code == "InternalServiceError"
+                        ):
+                            raise JimengException(
+                                f"Critical API Error: {event.error.message}"
+                            )
+
+                    elif event.type == "image_generation.completed":
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            {
+                                "type": "completed",
+                                "usage": event.usage,
+                                "model": event.model,
+                                "created": event.created,
+                            },
+                        )
+
+            except Exception as e:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, {"type": "error", "error": e}
+                )
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "done"})
+
+        asyncio.create_task(asyncio.to_thread(_producer_thread))
+
+        download_tasks = []
+        final_metadata = {
+            "batch_index": idx,
+            "created": int(time.time()),
+            "usage": {},
+            "images": [],
+        }
+
+        try:
+            while True:
+                comfy.model_management.throw_exception_if_processing_interrupted()
+
+                item = await queue.get()
+
+                if item["type"] == "done":
+                    break
+                elif item["type"] == "error":
+                    raise JimengException(format_api_error(item["error"]))
+                elif item["type"] == "log":
+                    if enable_group_generation and generation_count == 1:
+                        key = item.get("key")
+                        log_kwargs = item.get("kwargs", {})
+                        log_msg(key, **log_kwargs)
+                elif item["type"] == "completed":
+                    final_metadata["usage"] = item["usage"]
+                    if "model" in item:
+                        final_metadata["model"] = item["model"]
+                    if "created" in item:
+                        final_metadata["created"] = item["created"]
+                elif item["type"] == "url":
+                    url = item["url"]
+                    idx_in_group = item["index"]
+
+                    if enable_group_generation and generation_count == 1:
+                        log_msg("stream_recv_image", index=idx_in_group, url=url)
+
+                    async def _download_wrapper(d_url, d_idx):
+                        tensor = await download_url_to_image_tensor_async(
+                            session, d_url
+                        )
+                        return (d_idx, tensor, d_url)
+
+                    task = asyncio.create_task(_download_wrapper(url, idx_in_group))
+                    download_tasks.append(task)
+
+            if not download_tasks:
+                raise JimengException(get_text("err_batch_fail_all"))
+
+            results = await asyncio.gather(*download_tasks)
+            valid_results = [r for r in results if r[1] is not None]
+
+            if not valid_results:
+                raise JimengException(get_text("err_download_img"))
+
+            valid_results.sort(key=lambda x: x[0])
+
+            output_tensors = []
+            for v_idx, tensor, url in valid_results:
+                output_tensors.append(tensor)
+                final_metadata["images"].append({"url": url, "index": v_idx})
+
+            return torch.cat(output_tensors, dim=0), final_metadata
+
+        except Exception as e:
+            if isinstance(e, comfy.model_management.InterruptProcessingException):
+                raise e
+            raise JimengException(str(e))
