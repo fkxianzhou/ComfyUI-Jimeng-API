@@ -5,11 +5,11 @@ import { app } from "/scripts/app.js";
  * @type {string[]}
  */
 const TARGET_WIDGETS = [
-    'size', 
-    'enable_group_generation', 
-    'generation_count', 
-    'enable_timeout_setting', 
-    'enable_random_seed', 
+    'size',
+    'enable_group_generation',
+    'generation_count',
+    'enable_timeout_setting',
+    'enable_random_seed',
     'auto_duration',
     'draft_mode',
     'reuse_last_draft_task',
@@ -93,7 +93,7 @@ function updateNodeHeight(node, extraHeight = 0) {
 
     // 计算基础最小所需尺寸
     const size = node.computeSize();
-    
+
     // 叠加用户手动调整的高度差，并加上底部缓冲
     const targetHeight = size[1] + extraHeight;
 
@@ -117,7 +117,7 @@ function applyBottomPadding(node) {
             break;
         }
     }
-    
+
     let changed = false;
 
     // 2. 清理之前注入的 Padding（如果有）
@@ -136,22 +136,22 @@ function applyBottomPadding(node) {
     if (!lastWidget.hasBottomPadding) {
         if (!lastWidget.computeSize) {
             // 如果没有 computeSize，创建一个默认的 guess
-            lastWidget.computeSize = () => [0, 20]; 
+            lastWidget.computeSize = () => [0, 20];
         }
-        
+
         lastWidget.origComputeSizeBeforePadding = lastWidget.computeSize;
         const originalMethod = lastWidget.computeSize;
-        
-        lastWidget.computeSize = function(...args) {
+
+        lastWidget.computeSize = function (...args) {
             const size = originalMethod.apply(this, args);
             // 确保返回新数组，并在高度上增加 Padding
             return [size ? size[0] : 0, (size ? size[1] : 20) + BOTTOM_PADDING];
         };
-        
+
         lastWidget.hasBottomPadding = true;
         changed = true;
     }
-    
+
     return changed;
 }
 
@@ -171,7 +171,7 @@ function widgetLogic(node, widget) {
         extraHeight = Math.max(0, currentActualHeight - currentMinHeight);
     }
 
-    let shouldResize = false; 
+    let shouldResize = false;
 
     // 处理图像生成节点逻辑
     if (node.comfyClass === "JimengSeedream3" || node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
@@ -182,7 +182,7 @@ function widgetLogic(node, widget) {
 
             const changedW = toggleWidget(node, widthWidget, isCustom);
             const changedH = toggleWidget(node, heightWidget, isCustom);
-            
+
             if (changedW || changedH) shouldResize = true;
         }
     }
@@ -198,8 +198,8 @@ function widgetLogic(node, widget) {
     }
 
     // 处理视频生成节点逻辑
-    if (node.comfyClass === "JimengSeedance1" || 
-        node.comfyClass === "JimengReferenceImage2Video" || 
+    if (node.comfyClass === "JimengSeedance1" ||
+        node.comfyClass === "JimengReferenceImage2Video" ||
         node.comfyClass === "JimengSeedance1_5") {
 
         // 1.5版本特定逻辑：智能时长控制 & 样片模式联动
@@ -214,13 +214,13 @@ function widgetLogic(node, widget) {
                 const isDraftMode = widget.value === true;
                 const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
                 const reuseWidget = findWidgetByName(node, 'reuse_last_draft_task');
-                
-                
+
+
                 if (toggleWidget(node, reuseWidget, isDraftMode)) shouldResize = true;
-                
+
                 if (isDraftMode) {
                     if (reuseWidget) {
-                         widgetLogic(node, reuseWidget);
+                        widgetLogic(node, reuseWidget);
                     } else {
                         if (toggleWidget(node, draftTaskWidget, true)) shouldResize = true;
                     }
@@ -234,11 +234,11 @@ function widgetLogic(node, widget) {
                 const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
                 const draftModeWidget = findWidgetByName(node, 'draft_mode');
                 const isDraftMode = draftModeWidget ? draftModeWidget.value === true : false;
-                
+
                 if (isDraftMode) {
                     if (toggleWidget(node, draftTaskWidget, !isReuse)) shouldResize = true;
                 } else {
-                     if (toggleWidget(node, draftTaskWidget, false)) shouldResize = true;
+                    if (toggleWidget(node, draftTaskWidget, false)) shouldResize = true;
                 }
             }
         }
@@ -251,7 +251,7 @@ function widgetLogic(node, widget) {
 
             const changedPath = toggleWidget(node, batchPathWidget, isBatch);
             const changedSave = toggleWidget(node, saveLastFrameWidget, isBatch);
-            
+
             if (changedPath || changedSave) shouldResize = true;
         }
 
@@ -259,13 +259,13 @@ function widgetLogic(node, widget) {
         if (widget.name === 'enable_random_seed') {
             const useRandom = widget.value === true;
             const showSeedControls = !useRandom;
-            
+
             const seedWidget = findWidgetByName(node, 'seed');
             const controlWidget = findWidgetByName(node, 'control_after_generate');
-            
+
             const changedSeed = toggleWidget(node, seedWidget, showSeedControls);
             const changedControl = toggleWidget(node, controlWidget, showSeedControls);
-            
+
             if (changedSeed || changedControl) shouldResize = true;
         }
     }
@@ -279,7 +279,7 @@ function widgetLogic(node, widget) {
 
             const changedKey = toggleWidget(node, newKeyWidget, isCustom);
             const changedName = toggleWidget(node, newNameWidget, isCustom);
-            
+
             if (changedKey || changedName) shouldResize = true;
         }
     }
@@ -307,12 +307,114 @@ app.registerExtension({
 
         // 劫持 configure 方法以检测是否处于加载/配置阶段
         const origConfigure = node.configure;
-        node.configure = function(data) {
+        node.configure = function (data) {
             this._isConfiguring = true;
             const r = origConfigure ? origConfigure.apply(this, arguments) : undefined;
             delete this._isConfiguring;
             return r;
         };
+
+        // 动态控制 Seedream4/5 节点的图像输入接口
+        if (node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
+            const onConnectionsChange = node.onConnectionsChange;
+            node.onConnectionsChange = function (type, index, connected, link_info, slot) {
+                const r = onConnectionsChange ? onConnectionsChange.apply(this, arguments) : undefined;
+
+                if (this._isConfiguring) return r;
+
+                if (type !== 1) return r;
+
+                if (this._isUpdatingInputs) return r;
+                this._isUpdatingInputs = true;
+
+                try {
+                    let extraHeight = 0;
+                    if (this.size && this.computeSize && !this.flags?.collapsed) {
+                        const currentMinHeight = this.computeSize()[1];
+                        const currentActualHeight = this.size[1];
+                        extraHeight = Math.max(0, currentActualHeight - currentMinHeight);
+                    }
+
+                    const prefix = "image_";
+                    const MAX_INPUTS = 14;
+
+                    const allInputs = this.inputs || [];
+                    const dynamicInputs = [];
+                    let baseInputIndex = -1;
+
+                    for (let i = 0; i < allInputs.length; i++) {
+                        const name = allInputs[i].name;
+                        if (name === 'images') {
+                            baseInputIndex = i;
+                            dynamicInputs.push({ index: i, name: name, input: allInputs[i] });
+                        } else if (name.startsWith(prefix)) {
+                            dynamicInputs.push({ index: i, name: name, input: allInputs[i] });
+                        }
+                    }
+
+                    if (baseInputIndex === -1) return r;
+
+                    const activeLinks = [];
+
+                    for (const item of dynamicInputs) {
+                        if (item.input.link !== null) {
+                            const link = app.graph.links[item.input.link];
+                            if (link) {
+                                activeLinks.push({
+                                    origin_id: link.origin_id,
+                                    origin_slot: link.origin_slot,
+                                    type: link.type
+                                });
+                            }
+                        }
+                    }
+
+                    const targetStructure = [];
+
+                    const neededSlots = activeLinks.length + 1;
+                    const finalSlots = Math.min(neededSlots, MAX_INPUTS);
+
+                    const lastDynamicIndex = dynamicInputs[dynamicInputs.length - 1].index;
+                    const firstDynamicIndex = dynamicInputs[0].index; // This is 'images'
+
+                    for (let i = lastDynamicIndex; i > firstDynamicIndex; i--) {
+                        this.removeInput(i);
+                    }
+
+                    for (let k = 1; k < finalSlots; k++) {
+                        const name = `image_${k + 1}`;
+                        this.addInput(name, "IMAGE");
+                        const inputIndex = this.inputs.length - 1;
+                        const input = this.inputs[inputIndex];
+                        if (input) {
+                            const isZh = navigator.language.startsWith("zh");
+                            input.label = isZh ? `图像 ${k + 1}` : `Image ${k + 1}`;
+                        }
+                    }
+
+                    for (let k = 0; k < activeLinks.length; k++) {
+                        const linkInfo = activeLinks[k];
+                        const targetSlotIndex = firstDynamicIndex + k;
+
+                        const currentInput = this.inputs[targetSlotIndex];
+
+                        const sourceNode = app.graph.getNodeById(linkInfo.origin_id);
+                        if (sourceNode) {
+                            sourceNode.connect(linkInfo.origin_slot, this, targetSlotIndex);
+                        }
+                    }
+
+                    updateNodeHeight(this, extraHeight);
+
+                } catch (e) {
+                    console.error("[Jimeng] Error updating dynamic inputs:", e);
+                } finally {
+                    this._isUpdatingInputs = false;
+                }
+
+                return r;
+            };
+        }
 
         // 筛选需监听的组件
         const widgetsToWatch = node.widgets?.filter(w => TARGET_WIDGETS.includes(w.name));

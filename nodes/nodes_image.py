@@ -273,6 +273,7 @@ class JimengSeedream5(comfy_io.ComfyNode):
         generation_count,
         watermark,
         images=None,
+        **kwargs,
     ) -> comfy_io.NodeOutput:
         node_id = cls.hidden.unique_id
         ark_client = client.ark
@@ -283,9 +284,26 @@ class JimengSeedream5(comfy_io.ComfyNode):
 
         sequential_param = "auto" if enable_group_generation else "disabled"
 
-        n_input_images = 0
+        input_image_tensors = []
         if images is not None:
-            n_input_images = images.shape[0]
+            input_image_tensors.append(images)
+            
+        sorted_keys = sorted([k for k in kwargs.keys() if k.startswith("image_")], 
+                             key=lambda x: int(x.split("_")[-1]) if x.split("_")[-1].isdigit() else 999)
+        
+        for k in sorted_keys:
+            img = kwargs[k]
+            if isinstance(img, torch.Tensor):
+                input_image_tensors.append(img)
+
+        n_input_images = 0
+        image_b64_list = []
+        
+        for tensor in input_image_tensors:
+            batch_size = tensor.shape[0]
+            n_input_images += batch_size
+            for i in range(batch_size):
+                 image_b64_list.append(_image_to_base64(tensor[i : i + 1]))
 
         if sequential_param == "auto":
             total_count = n_input_images + max_images
@@ -309,10 +327,7 @@ class JimengSeedream5(comfy_io.ComfyNode):
             size_str = size.split(" ")[0]
 
         image_param = None
-        if images is not None:
-            image_b64_list = [
-                _image_to_base64(images[i : i + 1]) for i in range(n_input_images)
-            ]
+        if n_input_images > 0:
             if n_input_images == 1:
                 image_param = f"data:image/jpeg;base64,{image_b64_list[0]}"
             else:
@@ -363,7 +378,6 @@ class JimengSeedream5(comfy_io.ComfyNode):
 
         if tensors:
             try:
-                # Calculate total images generated (might be > generation_count if grouped)
                 total_imgs = sum([t.shape[0] for t in tensors]) if isinstance(tensors, list) else tensors.shape[0]
                 client.update_usage(model_id, total_imgs)
             except:
@@ -432,6 +446,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
         generation_count,
         watermark,
         images=None,
+        **kwargs,
     ) -> comfy_io.NodeOutput:
         node_id = cls.hidden.unique_id
         ark_client = client.ark
@@ -442,9 +457,26 @@ class JimengSeedream4(comfy_io.ComfyNode):
 
         sequential_param = "auto" if enable_group_generation else "disabled"
 
-        n_input_images = 0
+        input_image_tensors = []
         if images is not None:
-            n_input_images = images.shape[0]
+            input_image_tensors.append(images)
+            
+        sorted_keys = sorted([k for k in kwargs.keys() if k.startswith("image_")], 
+                             key=lambda x: int(x.split("_")[-1]) if x.split("_")[-1].isdigit() else 999)
+        
+        for k in sorted_keys:
+            img = kwargs[k]
+            if isinstance(img, torch.Tensor):
+                input_image_tensors.append(img)
+
+        n_input_images = 0
+        image_b64_list = []
+        
+        for tensor in input_image_tensors:
+            batch_size = tensor.shape[0]
+            n_input_images += batch_size
+            for i in range(batch_size):
+                 image_b64_list.append(_image_to_base64(tensor[i : i + 1]))
 
         if sequential_param == "auto":
             total_count = n_input_images + max_images
@@ -471,10 +503,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
             size_str = size.split(" ")[0]
 
         image_param = None
-        if images is not None:
-            image_b64_list = [
-                _image_to_base64(images[i : i + 1]) for i in range(n_input_images)
-            ]
+        if n_input_images > 0:
             if n_input_images == 1:
                 image_param = f"data:image/jpeg;base64,{image_b64_list[0]}"
             else:

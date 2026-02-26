@@ -64,8 +64,75 @@
         "tooltip": "是否在生成的图像上添加水印。"
       },
       "image": {
-        "name": "输入图像",
-        "tooltip": "用于图生图的可选输入图像。"
+        "name": "图像",
+        "tooltip": "用于图生图的可选图像。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "图像",
+        "tooltip": "生成的图像。"
+      },
+      "1": {
+        "name": "响应",
+        "tooltip": "API 的 JSON 格式响应。"
+      }
+    }
+  },
+  "JimengSeedream4": {
+    "display_name": "图像生成（Seedream 4）",
+    "description": "使用 Seedream 4 模型生成图像，支持单图或组图（自动）模式。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "火山方舟 API 客户端。"
+      },
+      "model_version": {
+        "name": "模型版本",
+        "tooltip": "选择要使用的 Seedream4 模型版本。"
+      },
+      "prompt": {
+        "name": "提示词",
+        "tooltip": "用于图像生成的文本提示词。"
+      },
+      "enable_group_generation": {
+        "name": "启用组图生成",
+        "tooltip": "基于输入的内容，生成的一组内容关联的图片。"
+      },
+      "max_images": {
+        "name": "最大图片数",
+        "tooltip": "在组图模式下生成的最大图像数量。"
+      },
+      "size": {
+        "name": "尺寸",
+        "tooltip": "预设的图像尺寸。选择adaptive时，模型会根据用户提示词，智能选择最合适的宽高比。",
+        "options": {
+          "Custom": "自定义"
+        }
+      },
+      "width": {
+        "name": "宽度",
+        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）。"
+      },
+      "height": {
+        "name": "高度",
+        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）。"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "Seedream4 模型不支持该参数，此功能仅用于刷新ComfyUI缓存"
+      },
+      "generation_count": {
+        "name": "生成数量",
+        "tooltip": "一次性并发生成的批次数量。"
+      },
+      "watermark": {
+        "name": "水印",
+        "tooltip": "是否在生成的图像上添加水印。"
+      },
+      "images": {
+        "name": "图像 1",
+        "tooltip": "用于图生图的参考图像。"
       }
     },
     "outputs": {
@@ -135,75 +202,8 @@
         "tooltip": "是否在生成的图像上添加水印。"
       },
       "images": {
-        "name": "输入图像",
-        "tooltip": "用于图生图的输入图像。"
-      }
-    },
-    "outputs": {
-      "0": {
-        "name": "图像",
-        "tooltip": "生成的图像。"
-      },
-      "1": {
-        "name": "响应",
-        "tooltip": "API 的 JSON 格式响应。"
-      }
-    }
-  },
-  "JimengSeedream4": {
-    "display_name": "图像生成（Seedream 4）",
-    "description": "使用 Seedream 4 模型生成图像，支持单图或组图（自动）模式。",
-    "inputs": {
-      "client": {
-        "name": "客户端",
-        "tooltip": "火山方舟 API 客户端。"
-      },
-      "model_version": {
-        "name": "模型版本",
-        "tooltip": "选择要使用的 Seedream4 模型版本。"
-      },
-      "prompt": {
-        "name": "提示词",
-        "tooltip": "用于图像生成的文本提示词。"
-      },
-      "enable_group_generation": {
-        "name": "启用组图生成",
-        "tooltip": "基于输入的内容，生成的一组内容关联的图片。"
-      },
-      "max_images": {
-        "name": "最大图片数",
-        "tooltip": "在组图模式下生成的最大图像数量。"
-      },
-      "size": {
-        "name": "尺寸",
-        "tooltip": "预设的图像尺寸。选择adaptive时，模型会根据用户提示词，智能选择最合适的宽高比。",
-        "options": {
-          "Custom": "自定义"
-        }
-      },
-      "width": {
-        "name": "宽度",
-        "tooltip": "自定义宽度（仅当尺寸为 'Custom' 时生效）。"
-      },
-      "height": {
-        "name": "高度",
-        "tooltip": "自定义高度（仅当尺寸为 'Custom' 时生效）。"
-      },
-      "seed": {
-        "name": "种子",
-        "tooltip": "Seedream4 模型不支持该参数，此功能仅用于刷新ComfyUI缓存"
-      },
-      "generation_count": {
-        "name": "生成数量",
-        "tooltip": "一次性并发生成的批次数量。"
-      },
-      "watermark": {
-        "name": "水印",
-        "tooltip": "是否在生成的图像上添加水印。"
-      },
-      "images": {
-        "name": "输入图像",
-        "tooltip": "用于图生图的输入图像。"
+        "name": "图像 1",
+        "tooltip": "用于图生图的参考图像。"
       }
     },
     "outputs": {
@@ -387,7 +387,7 @@
       },
       "draft_task_id": {
         "name": "样片任务 ID",
-        "tooltip": "填入样片任务 ID，以生成正式视频。填入此项时，提示词和输入图像将被忽略，但分辨率等参数生效。"
+        "tooltip": "填入样片任务 ID，以生成正式视频。填入此项时，提示词和参考图像将被忽略，但分辨率等参数生效。"
       },
       "image": {
         "name": "首帧图像",
@@ -414,7 +414,7 @@
     }
   },
   "JimengReferenceImage2Video": {
-    "display_name": "参考图生视频（Seedance 1.0 lite）",
+    "display_name": "视频生成（参考图生视频）",
     "description": "使用 Seedance 1.0 lite 模型生成视频，根据输入的提示词和一张或多张参考图像来生成视频。",
     "inputs": {
       "client": {
