@@ -122,8 +122,8 @@ def check_and_update_dependencies():
     如果未安装或版本过低，将尝试自动安装/更新。
     """
     package_name = "volcengine-python-sdk"
-    install_spec = "volcengine-python-sdk[ark]>=5.0.9"
-    min_version = "5.0.9"
+    install_spec = "volcengine-python-sdk[ark]>=5.0.12"
+    min_version = "5.0.12"
 
     try:
         current_version = importlib.metadata.version(package_name)

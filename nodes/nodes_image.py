@@ -8,7 +8,7 @@ import time
 
 from comfy_api.latest import io as comfy_io
 
-from volcenginesdkarkruntime.types.images.images import SequentialImageGenerationOptions
+from volcenginesdkarkruntime.types.images.images import SequentialImageGenerationOptions, ContentGenerationTool
 
 from .nodes_shared import (
     GLOBAL_CATEGORY,
@@ -363,7 +363,7 @@ class JimengSeedream5(comfy_io.ComfyNode):
                 "sequential_image_generation": sequential_param,
             }
             if enable_web_search:
-                kwargs["extra_body"] = {"tools": [{"type": "web_search"}]}
+                kwargs["tools"] = [ContentGenerationTool(type="web_search")]
 
             if image_param:
                 kwargs["image"] = image_param
