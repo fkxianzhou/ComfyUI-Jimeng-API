@@ -10,7 +10,7 @@ import random
 
 import comfy.model_management
 from server import PromptServer
-from .nodes_shared import log_msg, format_api_error, get_text, JimengException, create_white_image_tensor, create_white_video_file
+from .nodes_shared import log_msg, format_api_error, get_text, JimengException, create_white_image_tensor, create_white_video_file, safe_cat_tensors
 from .models_config import VIDEO_MODEL_MAP, VIDEO_2_UI_OPTIONS
 from .utils_download import download_url_to_image_tensor_async
 
@@ -879,7 +879,7 @@ class JimengGenerationExecutor:
                 output_tensors.append(tensor)
                 final_metadata["images"].append({"url": url, "index": v_idx})
 
-            return torch.cat(output_tensors, dim=0), final_metadata
+            return safe_cat_tensors(output_tensors), final_metadata
 
         except Exception as e:
             if isinstance(e, comfy.model_management.InterruptProcessingException):

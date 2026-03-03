@@ -20,6 +20,7 @@ from .nodes_shared import (
     JimengException,
     get_node_count_in_workflow,
     create_white_image_tensor,
+    safe_cat_tensors,
 )
 from .utils_download import download_url_to_image_tensor_async
 from .executor import JimengGenerationExecutor
@@ -204,10 +205,9 @@ class JimengSeedream3(comfy_io.ComfyNode):
                 pass
         
         if not tensors:
-            # Should have been handled by executor, but just in case
              return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
 
-        output_tensor = torch.cat(tensors, dim=0) if isinstance(tensors, list) else tensors
+        output_tensor = safe_cat_tensors(tensors)
         
         return comfy_io.NodeOutput(
             output_tensor, json.dumps(metadata, indent=2)
@@ -386,7 +386,7 @@ class JimengSeedream5(comfy_io.ComfyNode):
         if not tensors:
              return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
              
-        output_tensor = torch.cat(tensors, dim=0) if isinstance(tensors, list) else tensors
+        output_tensor = safe_cat_tensors(tensors)
         
         return comfy_io.NodeOutput(
             output_tensor, json.dumps(metadata, indent=2)
@@ -559,7 +559,7 @@ class JimengSeedream4(comfy_io.ComfyNode):
         if not tensors:
              return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
 
-        output_tensor = torch.cat(tensors, dim=0) if isinstance(tensors, list) else tensors
+        output_tensor = safe_cat_tensors(tensors)
         
         return comfy_io.NodeOutput(
             output_tensor, json.dumps(metadata, indent=2)

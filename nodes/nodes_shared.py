@@ -9,6 +9,7 @@ import time
 import numpy
 import PIL.Image
 import torch
+import torch.nn.functional as F
 import requests
 import cv2
 from volcenginesdkarkruntime import Ark
@@ -284,6 +285,38 @@ def create_white_image_tensor(width=1024, height=1024):
     Shape: [1, height, width, 3]
     """
     return torch.ones((1, height, width, 3), dtype=torch.float32)
+
+
+def safe_cat_tensors(tensors, dim=0):
+    """
+    安全地将多个 Tensor 拼接在一起。
+    主要用于处理 Adaptive Size 返回不同尺寸图片的情况。
+    """
+    if not tensors:
+        return None
+
+    if not isinstance(tensors, list):
+        return tensors
+
+    if len(tensors) == 0:
+        return None
+
+    target_tensor = tensors[0]
+    target_h, target_w = target_tensor.shape[1], target_tensor.shape[2]
+
+    processed_tensors = []
+    for t in tensors:
+        if t.shape[1] != target_h or t.shape[2] != target_w:
+            t_permuted = t.permute(0, 3, 1, 2)
+            t_resized = F.interpolate(
+                t_permuted, size=(target_h, target_w), mode="bilinear", align_corners=False
+            )
+            t_final = t_resized.permute(0, 2, 3, 1)
+            processed_tensors.append(t_final)
+        else:
+            processed_tensors.append(t)
+
+    return torch.cat(processed_tensors, dim=dim)
 
 
 def create_white_video_file(filename_prefix, width=1024, height=1024):
