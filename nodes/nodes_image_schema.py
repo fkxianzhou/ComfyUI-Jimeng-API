@@ -64,27 +64,52 @@ RECOMMENDED_SIZES_V5 = [
 ]
 
 
-def get_image_size_inputs(recommended_sizes, default_width=1024, default_height=1024):
+def get_image_generation_inputs(
+    recommended_sizes,
+    default_width=1024,
+    default_height=1024,
+    enable_group_generation=False,
+    enable_web_search=False,
+):
     """
-    获取图片尺寸相关的输入定义。
-    包含预设尺寸选择、自定义宽度和高度。
+    获取图片生成相关的输入定义。
+    包含预设尺寸选择、自定义宽度和高度、种子、生成数量和水印开关。
     """
-    return [
+    inputs = [
         comfy_io.Combo.Input("size", options=recommended_sizes),
         comfy_io.Int.Input("width", default=default_width, min=1, max=8192),
         comfy_io.Int.Input("height", default=default_height, min=1, max=8192),
-    ]
-
-
-def get_common_generation_inputs():
-    """
-    获取通用的生成参数输入定义。
-    包含种子、生成数量和水印开关。
-    """
-    return [
         comfy_io.Int.Input("seed", default=0, min=MIN_SEED, max=MAX_SEED),
-        comfy_io.Int.Input(
-            "generation_count", default=1, min=1, max=MAX_GENERATION_COUNT
-        ),
-        comfy_io.Boolean.Input("watermark", default=False),
     ]
+
+    if enable_group_generation:
+        inputs.extend(
+            [
+                comfy_io.Boolean.Input(
+                    "enable_group_generation",
+                    default=False,
+                    tooltip="On=Group, Off=Single",
+                ),
+                comfy_io.Int.Input("max_images", default=1, min=1, max=15),
+            ]
+        )
+
+    if enable_web_search:
+        inputs.append(
+            comfy_io.Boolean.Input(
+                "enable_web_search",
+                default=False,
+                tooltip="Enable internet search capabilities",
+            )
+        )
+
+    inputs.extend(
+        [
+            comfy_io.Int.Input(
+                "generation_count", default=1, min=1, max=MAX_GENERATION_COUNT
+            ),
+            comfy_io.Boolean.Input("watermark", default=False),
+        ]
+    )
+
+    return inputs

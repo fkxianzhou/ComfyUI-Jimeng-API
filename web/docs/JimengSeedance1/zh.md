@@ -20,7 +20,6 @@
 | `generation_count` | `INT` | 是 | 1 | 批量生成数量。 |
 | `filename_prefix` | `STRING` | 是 | "Jimeng/Video" | 保存文件的前缀。 |
 | `save_last_frame_batch`| `BOOLEAN` | 是 | False | 是否单独保存最后一帧。 |
-| `timeout_seconds` | `INT` | 是 | 172800 | 任务超时时间 (秒)。 |
 | `enable_offline_inference`| `BOOLEAN`| 是 | False | 是否启用离线推理模式 (Flex Tier)。 |
 | `non_blocking` | `BOOLEAN` | 是 | False | 是否使用非阻塞异步模式 (立即返回，后台轮询)。 |
 | `image` | `IMAGE` | 否 | - | (可选) 首帧图像。 |

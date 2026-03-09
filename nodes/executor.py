@@ -214,6 +214,11 @@ class JimengGenerationExecutor:
             msg = get_text("popup_batch_pending").format(count=task_count)
         else:
             msg = get_text("popup_task_pending").format(task_id=task_id, status=status)
+        
+        if self.ignore_errors:
+            print(f"[JimengAI] Pending (Ignored for multi-node): {msg}")
+            return
+
         raise JimengException(msg)
 
     async def run_batch_tasks(
@@ -405,6 +410,7 @@ class JimengGenerationExecutor:
                     },
                 )
             self._create_pending_json("submitted", task_ids[0], len(task_ids))
+            return []
 
         method_name = get_text(method_key)
         if tasks_to_poll:
@@ -725,7 +731,9 @@ class JimengGenerationExecutor:
 
         if not valid_results:
             if self.ignore_errors:
-                 return [], []
+                msg = format_api_error(first_exception) if first_exception else get_text("err_batch_fail_all")
+                self._create_failure_json(msg)
+                return [], []
 
             if generation_count > 1:
                 log_msg("err_batch_fail_all")

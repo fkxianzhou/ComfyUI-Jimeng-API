@@ -83,7 +83,7 @@ LOG_TRANSLATIONS = {
         "err_copy_fail": "复制文件失败: {path}，错误: {e}",
         "err_convert_tensor": "转换图片 Tensor 失败: {e}",
         "err_check_status_batch": "检查非阻塞任务状态失败: {e}",
-        "err_task_fail_ignored": "⚠️ 节点 {node_id} 任务失败 (并发模式已忽略): {msg}",
+        "err_task_fail_ignored": "⚠️ 节点 {node_id} 任务失败: {msg}",
         "debug_node_count": "检测到 {count} 个 {type} 节点。",
         "download_retry": "下载失败 (尝试 {attempt}/{total})。{delay}秒后重试... 错误: {e}",
         
@@ -94,7 +94,7 @@ LOG_TRANSLATIONS = {
         # 弹窗提示
         "popup_req_failed": "{msg}",
         "popup_task_failed": "任务 {task_id} 失败: {msg}",
-        "popup_batch_pending": "批量任务 ({count} 个) 处理中。请再次运行以检查结果。",
+        "popup_batch_pending": "任务处理中。请再次运行以检查结果。",
         "popup_task_pending": "任务 {task_id} 状态为 {status}。请再次运行以检查结果。",
         "popup_param_not_allowed": "提示词中不允许包含参数 '--{param}'。请使用节点的组件进行设置。",
         "popup_first_frame_missing": "使用尾帧图片时必须提供首帧图片。",

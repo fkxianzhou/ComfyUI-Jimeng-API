@@ -73,7 +73,7 @@ def _raise_if_text_params(prompt: str, text_params: list[str]) -> None:
             raise JimengException(get_text("popup_param_not_allowed").format(param=i))
 
 
-from .constants import VIDEO_MAX_SEED
+from .constants import VIDEO_MAX_SEED, VIDEO_DEFAULT_TIMEOUT
 
 class JimengVideoBase:
     """
@@ -436,7 +436,6 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        timeout_seconds,
         enable_offline_inference,
         non_blocking,
         image=None,
@@ -462,7 +461,7 @@ class JimengSeedance1(JimengVideoBase, comfy_io.ComfyNode):
             helper._append_image_content(content, last_frame_image, "last_frame")
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, timeout_seconds
+            enable_offline_inference, VIDEO_DEFAULT_TIMEOUT
         )
 
         return await helper._common_generation_logic(
@@ -556,7 +555,6 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        timeout_seconds,
         enable_offline_inference,
         non_blocking,
         draft_mode,
@@ -611,7 +609,7 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
         helper.NON_BLOCKING_TASK_CACHE = cls.NON_BLOCKING_TASK_CACHE
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, timeout_seconds
+            enable_offline_inference, VIDEO_DEFAULT_TIMEOUT
         )
 
         node_count = get_node_count_in_workflow("JimengSeedance1_5", prompt=cls.hidden.prompt)
@@ -786,7 +784,6 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
         generation_count,
         filename_prefix,
         save_last_frame_batch,
-        timeout_seconds,
         enable_offline_inference,
         non_blocking,
         ref_image_1=None,
@@ -808,7 +805,7 @@ class JimengReferenceImage2Video(JimengVideoBase, comfy_io.ComfyNode):
             raise JimengException(get_text("popup_ref_missing"))
 
         service_tier, execution_expires_after = helper._get_service_options(
-            enable_offline_inference, timeout_seconds
+            enable_offline_inference, VIDEO_DEFAULT_TIMEOUT
         )
 
         return await helper._common_generation_logic(

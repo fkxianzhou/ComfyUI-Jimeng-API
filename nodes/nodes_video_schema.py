@@ -86,9 +86,6 @@ def get_common_video_inputs():
         comfy_io.Int.Input("generation_count", default=1, min=1),
         comfy_io.String.Input("filename_prefix", default=DEFAULT_FILENAME_PREFIX),
         comfy_io.Boolean.Input("save_last_frame_batch", default=False),
-        comfy_io.Int.Input(
-            "timeout_seconds", default=VIDEO_DEFAULT_TIMEOUT, min=VIDEO_MIN_TIMEOUT, max=VIDEO_MAX_TIMEOUT
-        ),
         comfy_io.Boolean.Input("enable_offline_inference", default=False),
         comfy_io.Boolean.Input("non_blocking", default=False),
     ]
@@ -137,6 +134,6 @@ def get_aspect_ratio_input(default="adaptive", include_adaptive=True):
         if "adaptive" in options:
             options.remove("adaptive")
         if default == "adaptive":
-            default = "16:9" # Fallback default
+            default = "16:9"
             
     return comfy_io.Combo.Input("aspect_ratio", options=options, default=default)

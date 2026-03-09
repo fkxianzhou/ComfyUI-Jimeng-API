@@ -47,8 +47,7 @@ from .nodes_image_schema import (
     RECOMMENDED_SIZES_V3,
     RECOMMENDED_SIZES_V4,
     RECOMMENDED_SIZES_V5,
-    get_image_size_inputs,
-    get_common_generation_inputs,
+    get_image_generation_inputs,
 )
 
 def validate_custom_size(width, height, min_pixels, max_pixels):
@@ -95,8 +94,7 @@ class JimengSeedream3(comfy_io.ComfyNode):
                     "guidance_scale", default=5.0, min=1.0, max=10.0, step=0.1
                 ),
             ]
-            + get_image_size_inputs(cls.RECOMMENDED_SIZES)
-            + get_common_generation_inputs()
+            + get_image_generation_inputs(cls.RECOMMENDED_SIZES)
             + [
                 comfy_io.Image.Input("image", optional=True),
             ],
@@ -213,6 +211,175 @@ class JimengSeedream3(comfy_io.ComfyNode):
             output_tensor, json.dumps(metadata, indent=2)
         )
 
+class JimengSeedream4(comfy_io.ComfyNode):
+    """
+    Jimeng Seedream 4 图像生成节点。
+    支持文生图、组图生成，并使用流式 API 接收结果。
+    """
+    RECOMMENDED_SIZES = RECOMMENDED_SIZES_V4
+
+    @classmethod
+    def define_schema(cls) -> comfy_io.Schema:
+        return comfy_io.Schema(
+            node_id="JimengSeedream4",
+            display_name="Jimeng Seedream 4",
+            category=GLOBAL_CATEGORY,
+            inputs=[
+                JimengClientType.Input("client"),
+                comfy_io.Combo.Input(
+                    "model_version", options=list(SEEDREAM_4_MODEL_MAP.keys())
+                ),
+                comfy_io.String.Input("prompt", multiline=True, default=""),
+            ]
+            + get_image_generation_inputs(
+                cls.RECOMMENDED_SIZES,
+                default_width=2048,
+                default_height=2048,
+                enable_group_generation=True,
+            )
+            + [
+                comfy_io.Image.Input("images", optional=True),
+            ],
+            hidden=[comfy_io.Hidden.unique_id, comfy_io.Hidden.prompt],
+            outputs=[
+                comfy_io.Image.Output(display_name="images"),
+                comfy_io.String.Output(display_name="response"),
+            ],
+        )
+
+    @classmethod
+    async def execute(
+        cls,
+        client,
+        model_version,
+        prompt,
+        enable_group_generation,
+        max_images,
+        size,
+        width,
+        height,
+        seed,
+        generation_count,
+        watermark,
+        images=None,
+        **kwargs,
+    ) -> comfy_io.NodeOutput:
+        node_id = cls.hidden.unique_id
+        ark_client = client.ark
+
+        model_id = SEEDREAM_4_MODEL_MAP.get(model_version)
+        if not model_id:
+            model_id = list(SEEDREAM_4_MODEL_MAP.values())[0]
+
+        sequential_param = "auto" if enable_group_generation else "disabled"
+
+        input_image_tensors = []
+        if images is not None:
+            input_image_tensors.append(images)
+            
+        sorted_keys = sorted([k for k in kwargs.keys() if k.startswith("image_")], 
+                             key=lambda x: int(x.split("_")[-1]) if x.split("_")[-1].isdigit() else 999)
+        
+        for k in sorted_keys:
+            img = kwargs[k]
+            if isinstance(img, torch.Tensor):
+                input_image_tensors.append(img)
+
+        n_input_images = 0
+        image_b64_list = []
+        
+        for tensor in input_image_tensors:
+            batch_size = tensor.shape[0]
+            n_input_images += batch_size
+            for i in range(batch_size):
+                 image_b64_list.append(_image_to_base64(tensor[i : i + 1]))
+
+        if sequential_param == "auto":
+            total_count = n_input_images + max_images
+            if total_count > 15:
+                raise JimengException(
+                    get_text("err_img_limit_group_15").format(
+                        n=n_input_images, max=max_images, total=total_count
+                    )
+                )
+
+        if size == "Custom":
+            min_pixels = 1280 * 720
+
+            if "4.5" in model_version:
+                min_pixels = MIN_IMAGE_PIXELS_V4_5
+
+            size_str = validate_custom_size(
+                width,
+                height,
+                min_pixels,
+                MAX_IMAGE_PIXELS_V4,
+            )
+        else:
+            size_str = size.split(" ")[0]
+
+        image_param = None
+        if n_input_images > 0:
+            if n_input_images == 1:
+                image_param = f"data:image/jpeg;base64,{image_b64_list[0]}"
+            else:
+                image_param = [
+                    f"data:image/jpeg;base64,{b64}" for b64 in image_b64_list
+                ]
+
+        seq_options = None
+        if sequential_param == "auto":
+            seq_options = SequentialImageGenerationOptions(max_images=max_images)
+
+        client.check_quota(model_id, generation_count * max_images if enable_group_generation else generation_count)
+
+        if generation_count > 1:
+            log_msg("batch_submit_start", count=generation_count, model=model_id)
+
+        node_count = get_node_count_in_workflow("JimengSeedream4", prompt=cls.hidden.prompt)
+        # log_msg("debug_node_count", count=node_count, type="JimengSeedream4")
+        ignore_errors = node_count > 1
+
+        executor = JimengGenerationExecutor(client, node_id, ignore_errors=ignore_errors)
+
+        async def _generate_single(idx, session):
+            current_seed = random.randint(0, MAX_SEED) if seed == -1 else seed + idx
+            
+            kwargs = {
+                "model": model_id,
+                "prompt": prompt,
+                "size": size_str,
+                "response_format": "url",
+                "watermark": watermark,
+                "seed": current_seed,
+                "sequential_image_generation": sequential_param,
+            }
+            if image_param:
+                kwargs["image"] = image_param
+            if seq_options:
+                kwargs["sequential_image_generation_options"] = seq_options
+                
+            return await executor.stream_generation_helper(
+                session, ark_client, kwargs, idx, enable_group_generation, generation_count
+            )
+
+        tensors, metadata = await executor.run_parallel_requests(generation_count, _generate_single)
+
+        if tensors:
+            try:
+                total_imgs = sum([t.shape[0] for t in tensors]) if isinstance(tensors, list) else tensors.shape[0]
+                client.update_usage(model_id, total_imgs)
+            except:
+                pass
+        
+        if not tensors:
+             return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
+
+        output_tensor = safe_cat_tensors(tensors)
+        
+        return comfy_io.NodeOutput(
+            output_tensor, json.dumps(metadata, indent=2)
+        )
 
 class JimengSeedream5(comfy_io.ComfyNode):
     """
@@ -233,20 +400,14 @@ class JimengSeedream5(comfy_io.ComfyNode):
                     "model_version", options=list(SEEDREAM_5_MODEL_MAP.keys())
                 ),
                 comfy_io.String.Input("prompt", multiline=True, default=""),
-                comfy_io.Boolean.Input(
-                    "enable_group_generation",
-                    default=False,
-                    tooltip="On=Group, Off=Single",
-                ),
-                comfy_io.Int.Input("max_images", default=1, min=1, max=15),
-                                comfy_io.Boolean.Input(
-                    "enable_web_search",
-                    default=False,
-                    tooltip="Enable internet search capabilities",
-                ),
             ]
-            + get_image_size_inputs(cls.RECOMMENDED_SIZES, default_width=2048, default_height=2048)
-            + get_common_generation_inputs()
+            + get_image_generation_inputs(
+                cls.RECOMMENDED_SIZES,
+                default_width=2048,
+                default_height=2048,
+                enable_group_generation=True,
+                enable_web_search=True,
+            )
             + [
                 comfy_io.Image.Input("images", optional=True),
             ],
@@ -386,179 +547,6 @@ class JimengSeedream5(comfy_io.ComfyNode):
         if not tensors:
              return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
              
-        output_tensor = safe_cat_tensors(tensors)
-        
-        return comfy_io.NodeOutput(
-            output_tensor, json.dumps(metadata, indent=2)
-        )
-
-
-class JimengSeedream4(comfy_io.ComfyNode):
-    """
-    Jimeng Seedream 4 图像生成节点。
-    支持文生图、组图生成，并使用流式 API 接收结果。
-    """
-    RECOMMENDED_SIZES = RECOMMENDED_SIZES_V4
-
-    @classmethod
-    def define_schema(cls) -> comfy_io.Schema:
-        return comfy_io.Schema(
-            node_id="JimengSeedream4",
-            display_name="Jimeng Seedream 4",
-            category=GLOBAL_CATEGORY,
-            inputs=[
-                JimengClientType.Input("client"),
-                comfy_io.Combo.Input(
-                    "model_version", options=list(SEEDREAM_4_MODEL_MAP.keys())
-                ),
-                comfy_io.String.Input("prompt", multiline=True, default=""),
-                comfy_io.Boolean.Input(
-                    "enable_group_generation",
-                    default=False,
-                    tooltip="On=Group, Off=Single",
-                ),
-                comfy_io.Int.Input("max_images", default=1, min=1, max=15),
-            ]
-            + get_image_size_inputs(cls.RECOMMENDED_SIZES, default_width=2048, default_height=2048)
-            + get_common_generation_inputs()
-            + [
-                comfy_io.Image.Input("images", optional=True),
-            ],
-            hidden=[comfy_io.Hidden.unique_id, comfy_io.Hidden.prompt],
-            outputs=[
-                comfy_io.Image.Output(display_name="images"),
-                comfy_io.String.Output(display_name="response"),
-            ],
-        )
-
-    @classmethod
-    async def execute(
-        cls,
-        client,
-        model_version,
-        prompt,
-        enable_group_generation,
-        max_images,
-        size,
-        width,
-        height,
-        seed,
-        generation_count,
-        watermark,
-        images=None,
-        **kwargs,
-    ) -> comfy_io.NodeOutput:
-        node_id = cls.hidden.unique_id
-        ark_client = client.ark
-
-        model_id = SEEDREAM_4_MODEL_MAP.get(model_version)
-        if not model_id:
-            model_id = list(SEEDREAM_4_MODEL_MAP.values())[0]
-
-        sequential_param = "auto" if enable_group_generation else "disabled"
-
-        input_image_tensors = []
-        if images is not None:
-            input_image_tensors.append(images)
-            
-        sorted_keys = sorted([k for k in kwargs.keys() if k.startswith("image_")], 
-                             key=lambda x: int(x.split("_")[-1]) if x.split("_")[-1].isdigit() else 999)
-        
-        for k in sorted_keys:
-            img = kwargs[k]
-            if isinstance(img, torch.Tensor):
-                input_image_tensors.append(img)
-
-        n_input_images = 0
-        image_b64_list = []
-        
-        for tensor in input_image_tensors:
-            batch_size = tensor.shape[0]
-            n_input_images += batch_size
-            for i in range(batch_size):
-                 image_b64_list.append(_image_to_base64(tensor[i : i + 1]))
-
-        if sequential_param == "auto":
-            total_count = n_input_images + max_images
-            if total_count > 15:
-                raise JimengException(
-                    get_text("err_img_limit_group_15").format(
-                        n=n_input_images, max=max_images, total=total_count
-                    )
-                )
-
-        if size == "Custom":
-            min_pixels = 1280 * 720
-
-            if "4.5" in model_version:
-                min_pixels = MIN_IMAGE_PIXELS_V4_5
-
-            size_str = validate_custom_size(
-                width,
-                height,
-                min_pixels,
-                MAX_IMAGE_PIXELS_V4,
-            )
-        else:
-            size_str = size.split(" ")[0]
-
-        image_param = None
-        if n_input_images > 0:
-            if n_input_images == 1:
-                image_param = f"data:image/jpeg;base64,{image_b64_list[0]}"
-            else:
-                image_param = [
-                    f"data:image/jpeg;base64,{b64}" for b64 in image_b64_list
-                ]
-
-        seq_options = None
-        if sequential_param == "auto":
-            seq_options = SequentialImageGenerationOptions(max_images=max_images)
-
-        client.check_quota(model_id, generation_count * max_images if enable_group_generation else generation_count)
-
-        if generation_count > 1:
-            log_msg("batch_submit_start", count=generation_count, model=model_id)
-
-        node_count = get_node_count_in_workflow("JimengSeedream4", prompt=cls.hidden.prompt)
-        # log_msg("debug_node_count", count=node_count, type="JimengSeedream4")
-        ignore_errors = node_count > 1
-
-        executor = JimengGenerationExecutor(client, node_id, ignore_errors=ignore_errors)
-
-        async def _generate_single(idx, session):
-            current_seed = random.randint(0, MAX_SEED) if seed == -1 else seed + idx
-            
-            kwargs = {
-                "model": model_id,
-                "prompt": prompt,
-                "size": size_str,
-                "response_format": "url",
-                "watermark": watermark,
-                "seed": current_seed,
-                "sequential_image_generation": sequential_param,
-            }
-            if image_param:
-                kwargs["image"] = image_param
-            if seq_options:
-                kwargs["sequential_image_generation_options"] = seq_options
-                
-            return await executor.stream_generation_helper(
-                session, ark_client, kwargs, idx, enable_group_generation, generation_count
-            )
-
-        tensors, metadata = await executor.run_parallel_requests(generation_count, _generate_single)
-
-        if tensors:
-            try:
-                total_imgs = sum([t.shape[0] for t in tensors]) if isinstance(tensors, list) else tensors.shape[0]
-                client.update_usage(model_id, total_imgs)
-            except:
-                pass
-        
-        if not tensors:
-             return comfy_io.NodeOutput(create_white_image_tensor(), "[]")
-
         output_tensor = safe_cat_tensors(tensors)
         
         return comfy_io.NodeOutput(
