@@ -12,13 +12,14 @@ import torch
 import torch.nn.functional as F
 import requests
 import cv2
+import asyncio
 from volcenginesdkarkruntime import Ark
 
 from comfy_api.latest import io as comfy_io
 
 import logging
 
-from .constants import LOG_TRANSLATIONS, ERROR_TEXT_MATCH_RULES
+from .constants import LOG_TRANSLATIONS, ERROR_TEXT_MATCH_RULES, JIMENG_API_BASE_URL
 
 LOG_PREFIX = "[JimengAI] "
 
@@ -241,7 +242,7 @@ def validate_api_key(api_key: str) -> bool:
     验证 API Key 是否有效。
     """
     try:
-        url = "https://ark.cn-beijing.volces.com/api/v3"
+        url = JIMENG_API_BASE_URL
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -257,6 +258,90 @@ def validate_api_key(api_key: str) -> bool:
     except Exception as e:
         logger.error(f"API Key validation error: {e}")
         return False
+
+
+FILES_UPLOAD_CACHE = {}
+
+
+async def upload_file_to_ark(client, file_path, fps=None):
+    """
+    使用 client.ark.files.create 上传文件。
+    """
+    global FILES_UPLOAD_CACHE
+    
+    if file_path in FILES_UPLOAD_CACHE:
+        log_msg("visual_found_file", path=file_path)
+        return FILES_UPLOAD_CACHE[file_path]
+        
+    try:
+        log_msg("visual_uploading", path=file_path)
+        if hasattr(client.ark, "files"):
+            with open(file_path, "rb") as f:
+                
+                upload_kwargs = {
+                    "file": f,
+                    "purpose": "user_data"
+                }
+                
+                if fps is not None:
+                    preprocess_config = {
+                        "video": {
+                            "fps": float(fps)
+                        }
+                    }
+                    upload_kwargs["preprocess_configs"] = preprocess_config
+
+                file_obj = await asyncio.to_thread(
+                    client.ark.files.create,
+                    **upload_kwargs
+                )
+                
+                if hasattr(file_obj, "id"):
+                    file_id = file_obj.id
+                    log_msg("visual_uploaded", id=file_id, status=getattr(file_obj, 'status', 'unknown'))
+                    
+                    await wait_for_file_active(client, file_id)
+                    
+                    FILES_UPLOAD_CACHE[file_path] = file_id
+                    return file_id
+                else:
+                    raise JimengException("Upload failed: No file ID returned.")
+        else:
+             raise JimengException("SDK does not support files.create.")
+             
+    except Exception as e:
+        logger.error(f"Upload failed for {file_path}: {e}")
+        raise JimengException(f"File upload failed: {e}")
+
+
+async def wait_for_file_active(client, file_id):
+    """
+    轮询文件状态，直到其变为“active”状态。
+    """
+    log_msg("visual_wait_active", id=file_id)
+    max_retries = 60
+    
+    for _ in range(max_retries):
+        try:
+            file_info = await asyncio.to_thread(
+                client.ark.files.retrieve,
+                file_id=file_id
+            )
+            
+            status = getattr(file_info, "status", "unknown")
+            log_msg("visual_file_status", id=file_id, status=status)
+            
+            if status == "active":
+                return True
+            elif status == "error":
+                raise JimengException(f"File processing failed: {file_id}")
+            
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Error checking file status: {e}")
+            await asyncio.sleep(1)
+            
+    raise JimengException(f"Timeout waiting for file {file_id} to become active.")
 
 
 def _tensor2images(tensor: torch.Tensor) -> list:
@@ -446,7 +531,7 @@ class JimengAPIClient(comfy_io.ComfyNode):
             raise JimengException(get_text("popup_key_valid_err").format(key=key_name))
 
         ark_client = Ark(
-            api_key=api_key, base_url="https://ark.cn-beijing.volces.com/api/v3"
+            api_key=api_key, base_url=JIMENG_API_BASE_URL
         )
 
         return comfy_io.NodeOutput(JimengClients(ark_client, api_key))

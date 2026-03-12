@@ -92,6 +92,7 @@ from comfy_api.latest import ComfyExtension
 from .nodes.nodes_shared import JimengAPIClient
 from .nodes.nodes_image import JimengSeedream3, JimengSeedream4, JimengSeedream5
 from .nodes.nodes_video import JimengSeedance1, JimengSeedance1_5, JimengReferenceImage2Video, JimengVideoQueryTasks, JimengProgressTest
+from .nodes.nodes_visual import JimengVisualUnderstanding
 from .nodes.quota import JimengQuotaSettings
 
 def get_init_text(key, **kwargs):
@@ -173,6 +174,7 @@ class JimengExtension(ComfyExtension):
             JimengSeedance1_5,
             JimengReferenceImage2Video,
             JimengVideoQueryTasks,
+            JimengVisualUnderstanding,
             #JimengProgressTest,
             JimengQuotaSettings,
         ]

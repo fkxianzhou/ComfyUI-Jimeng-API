@@ -11,6 +11,7 @@ import random
 import comfy.model_management
 from server import PromptServer
 from .nodes_shared import log_msg, format_api_error, get_text, JimengException, create_white_image_tensor, create_white_video_file, safe_cat_tensors
+from .constants import JIMENG_API_BASE_URL
 from .models_config import VIDEO_MODEL_MAP, VIDEO_2_UI_OPTIONS
 from .utils_download import download_url_to_image_tensor_async
 
@@ -391,8 +392,12 @@ class JimengGenerationExecutor:
             except Exception as e:
                 log_msg("err_on_tasks_created", e=e)
 
+        est_resolution = resolution
+        if extra_api_params and extra_api_params.get("draft"):
+            est_resolution = "480p"
+
         estimated_single_task_time, method_key = await _get_api_estimated_time_async(
-            ark_client, model_name, estimation_duration, resolution
+            ark_client, model_name, estimation_duration, est_resolution
         )
         if estimated_single_task_time <= 0:
             estimated_single_task_time = 1
@@ -893,3 +898,163 @@ class JimengGenerationExecutor:
             if isinstance(e, comfy.model_management.InterruptProcessingException):
                 raise e
             raise JimengException(str(e))
+
+
+class JimengVisualExecutor:
+    """
+    视觉理解任务执行器。
+    """
+    def __init__(self, client):
+        self.client = client
+        self.api_key = client.api_key
+        self.base_url = JIMENG_API_BASE_URL
+
+    async def create_response_task(self, payload):
+        """
+        调用 POST /api/v3/responses 以创建任务。
+        """
+        url = f"{self.base_url}/responses"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        log_msg("visual_task_created", id="Creating...")
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise JimengException(f"Create Response Failed ({resp.status}): {text}")
+                    
+                    data = await resp.json()
+                    if "id" not in data:
+                        raise JimengException(f"Invalid API response: {data}")
+                    
+                    task_id = data["id"]
+                    log_msg("visual_task_created", id=task_id)
+                    return task_id
+            except Exception as e:
+                raise JimengException(f"Network error during task creation: {e}")
+
+    async def poll_response_result(self, task_id):
+        """
+        轮询 GET /api/v3/responses/{id} 直至完成。
+        """
+        url = f"{self.base_url}/responses/{task_id}"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        log_msg("visual_polling", id=task_id)
+        
+        max_retries = 120
+        async with aiohttp.ClientSession() as session:
+            for _ in range(max_retries):
+                try:
+                    async with session.get(url, headers=headers) as resp:
+                        if resp.status != 200:
+                            text = await resp.text()
+                            raise JimengException(f"Poll Response Failed ({resp.status}): {text}")
+                        
+                        data = await resp.json()
+                        status = data.get("status")
+                        
+                        if status == "completed":
+                            log_msg("visual_task_complete", id=task_id)
+                            return data
+                        elif status == "failed":
+                            error = data.get("error", {})
+                            msg = error.get("message", "Unknown error")
+                            log_msg("visual_task_failed", id=task_id, msg=msg)
+                            raise JimengException(f"Task failed: {msg}")
+                        elif status in ["queued", "running"]:
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            await asyncio.sleep(1)
+                except JimengException:
+                    raise
+                except Exception as e:
+                    print(f"[JimengAI] Polling error: {e}")
+                    await asyncio.sleep(1)
+            
+            raise JimengException("Task polling timed out.")
+
+    async def stream_response_task(self, payload):
+        """
+        调用 POST /api/v3/responses 并设置 stream=True，同时处理 SSE 事件。
+        """
+        url = f"{self.base_url}/responses"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload["stream"] = True
+        
+        log_msg("visual_stream_start")
+        
+        full_content = ""
+        reasoning_content = ""
+        final_json = {}
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise JimengException(f"Stream Request Failed ({resp.status}): {text}")
+                    
+                    async for line in resp.content:
+                        line = line.decode('utf-8').strip()
+                        if not line:
+                            continue
+                        
+                        if line.startswith("data:"):
+                            data_str = line[5:].strip()
+                            if data_str == "[DONE]":
+                                break
+                                
+                            try:
+                                event = json.loads(data_str)
+                                event_type = event.get("type")
+                                
+                                if "response" in event:
+                                     final_json = event["response"]
+
+                                if event_type == "response.output_text.delta":
+                                    delta = event.get("delta", "")
+                                    if delta:
+                                        print(delta, end="", flush=True)
+                                        full_content += delta
+
+                                elif event_type == "response.completed":
+                                    print("")
+                                    log_msg("visual_stream_complete")
+                                         
+                                elif event_type == "response.failed":
+                                    print("")
+                                    raise JimengException(f"Stream Failed: {event}")
+
+                                elif event_type == "response.reasoning_text.delta" or event_type == "response.reasoning_summary_text.delta":
+                                    r_delta = event.get("delta", "")
+                                    if r_delta:
+                                        print(r_delta, end="", flush=True)
+                                        reasoning_content += r_delta
+                                
+                            except json.JSONDecodeError:
+                                pass
+                                
+            except Exception as e:
+                raise JimengException(f"Stream Error: {e}")
+                
+        if not final_json:
+             final_json = {"status": "completed (stream)", "output": full_content}
+             
+        if reasoning_content:
+            final_json["reasoning_content"] = reasoning_content
+             
+        return full_content, json.dumps(final_json, indent=2, ensure_ascii=False)

@@ -51,3 +51,11 @@ QUERY_TASKS_MODEL_LIST = ["all"] + VIDEO_1_UI_OPTIONS + VIDEO_1_5_UI_OPTIONS + V
 
 # 参考图生视频默认 ID
 REF_IMG_2_VIDEO_MODEL_ID = VIDEO_MODEL_MAP["doubao-seedance-1-0-lite-i2v"]
+
+# 视觉理解模型列表
+VISUAL_MODEL_MAP = {
+    "doubao-seed-2-0-pro": "doubao-seed-2-0-pro-260215",
+    "doubao-seed-2-0-lite": "doubao-seed-2-0-lite-260215",
+    "doubao-seed-2-0-mini": "doubao-seed-2-0-mini-260215",
+}
+VISUAL_UI_OPTIONS = list(VISUAL_MODEL_MAP.keys())

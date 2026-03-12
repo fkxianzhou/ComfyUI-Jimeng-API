@@ -580,5 +580,77 @@
         "tooltip": "当前的配额使用状态。"
       }
     }
+  },
+  "JimengVisualUnderstanding": {
+    "display_name": "视觉理解（Seed 2.0）",
+    "description": "使用 Seed 2.0 模型进行视觉理解对话，支持图片/视频输入和多轮对话。",
+    "inputs": {
+      "client": {
+        "name": "客户端",
+        "tooltip": "火山方舟 API 客户端。"
+      },
+      "model": {
+        "name": "模型",
+        "tooltip": "选择要使用的视觉理解模型。"
+      },
+      "system_prompt": {
+        "name": "系统提示词",
+        "tooltip": "系统级别的指令，用于定义助手的行为、角色和回答风格。"
+      },
+      "user_prompt": {
+        "name": "用户提示词",
+        "tooltip": "用户的输入文本，描述您想了解的内容或向模型提出的问题。"
+      },
+      "detail": {
+        "name": "图片理解程度",
+        "tooltip": "图片理解的精细度。'low': 低精度模式，消耗 Token 较少；'high': 高精度模式，提供更详细的分析。"
+      },
+      "fps": {
+        "name": "视频采样帧率",
+        "tooltip": "每秒钟从视频中抽取指定数量的图像。取值越高，对于视频中画面变化理解越精细；取值越低，对于视频中画面变化感知减弱，但是使用的token花费少，速度也更快。"
+      },
+      "reasoning_mode": {
+        "name": "思考模式",
+        "tooltip": "控制模型是否开启深度思考模式。'auto': 自动判断是否需要思考；'enabled': 强制开启思考；'disabled': 关闭思考，直接回答。"
+      },
+      "reasoning_effort": {
+        "name": "思考深度",
+        "tooltip": "限制深度思考的工作量。'medium': 均衡模式(兼顾速度与深度)；'minimal': 关闭思考(直接回答)；'low': 轻量思考(侧重快速响应)；'high': 深度分析(处理复杂问题)。"
+      },
+      "turns": {
+        "name": "对话轮数",
+        "tooltip": "多轮对话控制。设置为 1 表示开始新对话；大于 1 时，节点会尝试使用上一轮的 ID 维持上下文，实现连续对话。"
+      },
+      "stream": {
+        "name": "流式响应",
+        "tooltip": "响应内容是否流式返回。开启后，将在 ComfyUI 控制台实时打印生成的文本和推理内容，并在生成完成后一次性输出结果。"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "此功能仅用于刷新ComfyUI缓存。"
+      },
+      "visual_input_1": {
+        "name": "视觉输入 1",
+        "tooltip": "输入模型的图片或视频文件。"
+      },
+      "visual_input_2": {
+        "name": "视觉输入 2",
+        "tooltip": "可选的图像或视频输入。"
+      },
+      "visual_input_3": {
+        "name": "视觉输入 3",
+        "tooltip": "可选的图像或视频输入。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "内容",
+        "tooltip": "模型生成的文本回答。"
+      },
+      "1": {
+        "name": "完整响应",
+        "tooltip": "包含完整元数据的 JSON 响应。"
+      }
+    }
   }
 }

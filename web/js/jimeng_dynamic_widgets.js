@@ -13,7 +13,8 @@ const TARGET_WIDGETS = [
     'auto_duration',
     'draft_mode',
     'reuse_last_draft_task',
-    'key_name'
+    'key_name',
+    'reasoning_mode'
 ];
 
 /**
@@ -281,6 +282,16 @@ function widgetLogic(node, widget) {
             const changedName = toggleWidget(node, newNameWidget, isCustom);
 
             if (changedKey || changedName) shouldResize = true;
+        }
+    }
+
+    // 处理视觉理解节点逻辑
+    if (node.comfyClass === "JimengVisualUnderstanding") {
+        if (widget.name === 'reasoning_mode') {
+            const isThinkingEnabled = widget.value !== "disabled";
+            const effortWidget = findWidgetByName(node, 'reasoning_effort');
+            
+            if (toggleWidget(node, effortWidget, isThinkingEnabled)) shouldResize = true;
         }
     }
 

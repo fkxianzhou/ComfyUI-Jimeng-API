@@ -1,5 +1,8 @@
 # Jimeng API 常量与多语言配置
 
+# API 配置
+JIMENG_API_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+
 # 通用常量
 MAX_SEED = 2147483647
 MIN_SEED = -1
@@ -121,6 +124,26 @@ LOG_TRANSLATIONS = {
         "quota_set_log": "设置配额: {model} -> {limit} ({type})",
         "quota_update_log": "更新用量: {model} +{cost} (总计: {total})",
         
+        # 视觉理解
+        "visual_processing_input": "正在处理 visual_input_{i}, 类型: {type}",
+        "visual_found_file": "在输入目录中找到文件: {path}",
+        "visual_uploading": "正在上传文件: {path}",
+        "visual_uploaded": "文件上传成功 ID: {id}, 状态: {status}",
+        "visual_wait_active": "正在等待文件 {id} 变为可用状态...",
+        "visual_file_status": "文件 {id} 状态: {status}",
+        "visual_new_conv": "开始新对话 (turns=1)。",
+        "visual_cont_conv": "继续对话 {id}...",
+        "visual_cached_id": "已缓存 response_id 用于下一轮: {id}",
+        "visual_stream_start": "开始流式响应...",
+        "visual_stream_complete": "流式响应完成。",
+        "visual_task_created": "响应任务已创建: {id}",
+        "visual_polling": "正在轮询响应任务: {id}",
+        "visual_task_complete": "任务 {id} 完成。",
+        "visual_task_failed": "任务 {id} 失败: {msg}",
+        "visual_warn_del_temp": "警告: 删除临时文件 {path} 失败: {e}",
+        "visual_warn_no_id": "警告: 输入 {i} 未获取到 file_id",
+        "visual_warn_no_history": "警告: turns > 1 但未找到历史记录。开始新对话。",
+
         # API 错误码映射
         "api_errors": {
             "AuthenticationError": "API 鉴权失败。请检查 api_keys.json 文件：1. API Key 是否填写正确；2. JSON 格式是否因编辑而损坏。",
@@ -221,6 +244,27 @@ LOG_TRANSLATIONS = {
         "quota_update_failed": "Warning: Failed to update quota usage: {e}",
         "quota_set_log": "Set quota for {model}: {limit} ({type})",
         "quota_update_log": "Updated usage for {model}: +{cost} (Total: {total})",
+
+        # Visual Understanding
+        "visual_processing_input": "Processing visual_input_{i}, type: {type}",
+        "visual_found_file": "Found file in input directory: {path}",
+        "visual_uploading": "Uploading file: {path}",
+        "visual_uploaded": "Uploaded file_id: {id}, Status: {status}",
+        "visual_wait_active": "Waiting for file {id} to be active...",
+        "visual_file_status": "File {id} status: {status}",
+        "visual_new_conv": "Starting new conversation (turns=1).",
+        "visual_cont_conv": "Continuing conversation {id}...",
+        "visual_cached_id": "Cached response_id for next turn: {id}",
+        "visual_stream_start": "Starting Streaming Response...",
+        "visual_stream_complete": "Stream Completed.",
+        "visual_task_created": "Response Task Created: {id}",
+        "visual_polling": "Polling Response Task: {id}",
+        "visual_task_complete": "Task {id} completed.",
+        "visual_task_failed": "Task {id} failed: {msg}",
+        "visual_warn_del_temp": "Warning: Failed to delete temp file {path}: {e}",
+        "visual_warn_no_id": "Warning: No file_id obtained for input {i}",
+        "visual_warn_no_history": "Warning: turns > 1 but no previous history found. Starting new conversation.",
+
         "api_errors": {
             "AuthenticationError": "Invalid API Key (401). Please check api_keys.json.",
             "AccessDenied": "Access Denied (403). No permission or IP whitelist issue.",

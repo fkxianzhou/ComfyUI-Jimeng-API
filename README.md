@@ -62,6 +62,8 @@
   - `视频生成（Seedance 1.5 Pro）`: 支持**音频生成**和**智能时长**的高级视频生成节点。
   - `视频生成（参考图生视频）`: 根据 1-4 张**参考图像**生成视频。
   - `视频生成任务列表查询`: 用于查询和管理在 API 上运行的任务历史。
+- **视觉理解**:
+  - `视觉理解（Visual Understanding）`: 使用 Seed 2.0 模型进行视觉理解对话，支持图片/视频输入和多轮对话。
 
 ## 📑 节点详解
 
@@ -119,6 +121,17 @@
 
 **示例工作流**:
 ![Seedance 1 Workflow](example_workflows/Seedance%201.jpg)
+
+---
+
+### `视觉理解（Visual Understanding）`
+支持 `doubao-seed-2.0` 系列模型。
+- **多模态输入**: 支持上传图片或视频进行理解和问答。
+- **多轮对话**: 支持开启多轮对话模式，保持上下文。
+- **深度思考**: 支持开启深度思考模式，提升复杂问题的推理能力。
+
+**示例工作流**:
+![Visual Understanding Workflow](example_workflows/VisualUnderstanding.jpg)
 
 ## 📓 示例工作流
 
