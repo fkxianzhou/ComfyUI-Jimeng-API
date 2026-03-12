@@ -389,7 +389,9 @@ app.registerExtension({
                     const firstDynamicIndex = dynamicInputs[0].index; // This is 'images'
 
                     for (let i = lastDynamicIndex; i > firstDynamicIndex; i--) {
-                        this.removeInput(i);
+                        if (this.inputs[i].name.startsWith("image_")) {
+                            this.removeInput(i);
+                        }
                     }
 
                     for (let k = 1; k < finalSlots; k++) {
