@@ -6,11 +6,9 @@
 
 本项目为 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 提供了火山方舟的视觉模型（即梦/豆包） API 节点。用户可以通过这些节点在 ComfyUI 中使用多种图像生成和视频生成功能。
 
-- 项目已支持 `Seedance 2.0` 与 `Seedance 2.0 fast` 视频生成节点，可用于文生视频、多模态参考、视频编辑与视频延长场景。
+- 项目已支持 `Seedance 2.0`、`Seedance 2.0 Fast` 与 `Seedance 2.0 Mini`，标准版最高支持 4K。
 - 如在使用过程中遇到问题，请通过 [ISSUES](https://github.com/fkxianzhou/ComfyUI-Jimeng-API/issues) 反馈。
-- 暂不支持 ComfyUI 的 Nodes 2.0 新版 UI，如遇到显示异常：
-  1. 点击左侧/顶部 ComfyUI 图标 打开菜单。
-  2. 找到并关闭 Nodes 2.0 选项，切换回传统界面。
+- Classic Canvas 与 Nodes 2.0（Vue）均受支持，最低支持 ComfyUI `0.25.1`。
 
 ## ✨ 项目特性
 
@@ -55,7 +53,7 @@
 - **图像生成**:
   - `图像生成（Seedream 3）`: 基础图像生成节点。
   - `图像生成（Seedream 4）`: 高级图像生成节点，支持多图输入、**组图生成**以及 4.5 模型。
-  - `图像生成（Seedream 5）`: 最新一代图像生成节点，支持多图输入、组图生成以及**联网搜索**。
+  - `图像生成（Seedream 5）`: 支持 Seedream 5 Pro/Lite；Pro 提供提示词优化，Lite 支持组图与**联网搜索**。
 - **视频生成**:
   - `视频生成（Seedance 1.0）`: 核心视频生成节点，支持文生视频、图生视频（首/尾帧）。
   - `视频生成（Seedance 1.5 Pro）`: 支持**音频生成**和**智能时长**的高级视频生成节点。
@@ -63,7 +61,7 @@
   - `视频生成（参考图生视频）`: 根据 1-4 张**参考图像**生成视频。
   - `视频生成任务列表查询`: 用于查询和管理在 API 上运行的任务历史。
 - **视觉理解**:
-  - `视觉理解（Visual Understanding）`: 使用 Seed 2.0 模型进行视觉理解对话，支持图片/视频输入和多轮对话。
+  - `视觉理解（Visual Understanding）`: 默认使用 Seed 2.1 Pro，并保留 Seed 2.0 Pro/Lite/Mini 兼容旧工作流。
 
 ## ⚠️ 模型下线与节点弃用说明
 
@@ -97,10 +95,11 @@
 
 ### `图像生成（Seedream 4）`
 
-支持 `doubao-seedream-4.5`。
+支持 `doubao-seedream-4.5` 与 `doubao-seedream-4.0`。
 
 - **输入图像**: 支持单张或多张（Batch）图像作为参考。
 - **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
+- **提示词优化**: Seedream 4.0 可通过开关启用；Seedream 4.5 不发送此参数。
 
 **示例工作流**:
 ![Seedream 4 Workflow](./example_workflows/Seedream%204.jpg)
@@ -109,11 +108,11 @@
 
 ### `图像生成（Seedream 5）`
 
-支持最新的 `doubao-seedream-5.0-lite`。
+支持 `doubao-seedream-5.0-pro` 与 `doubao-seedream-5.0-lite`。
 
-- **输入图像**: 支持单张或多张（Batch）图像作为参考。
-- **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
-- **联网搜索**: 开启后模型可自主搜索互联网内容（如实时信息、商品等）辅助生成。
+- **Pro**: 最多 10 张参考图；保留种子与水印；默认开启提示词优化，使用参考图时必须开启；输出通过 URL 下载。
+- **Lite**: 保留流式 Base64、组图生成、联网搜索与种子功能。
+- **自定义尺寸**: Pro 要求宽高为 16 的倍数、比例在 1:16–16:1、总像素为 921600–4194304。
 
 **示例工作流**:
 ![Seedream 5 Workflow](./example_workflows/Seedream%205.jpg)
@@ -131,6 +130,11 @@
 
 支持最多 **9 张参考图 + 3 段参考视频 + 3 段参考音频**，可覆盖文生视频、多模态参考生视频、视频编辑、视频延长与联网搜索增强。
 
+- **标准版**: 480p / 720p / 1080p / 4K。
+- **Fast、Mini**: 480p / 720p。
+- **参考视频**: 最大 200 MB、409600–8295044 像素、24–60 FPS；可识别编码元数据时要求 H.264/H.265 视频与 AAC/MP3 音频。
+- **请求大小**: 最终紧凑 UTF-8 JSON 请求体不得超过 64 MiB。
+
 **示例工作流**:
 ![Seedance 2 Workflow](./example_workflows/Seedance%202.jpg)
 
@@ -142,9 +146,9 @@
 
 ***
 
-### `视觉理解（Seed 2.0）`
+### `视觉理解（Seed 2.1 / 2.0）`
 
-支持 `doubao-seed-2.0` 系列模型。
+默认使用 `doubao-seed-2-1-pro`，并保留 `doubao-seed-2.0` 系列模型。
 
 - **多模态输入**: 支持上传图片或视频进行理解和问答。
 - **多轮对话**: 支持开启多轮对话模式，保持上下文。
@@ -156,3 +160,15 @@
 ## 📓 示例工作流
 
 您可以在 `example_workflows` 目录中找到所有节点的示例工作流。
+
+`2.4 Model Updates.json` 同时展示 Seedream 5 Pro、Seedance 2 标准版 4K 与 Seed 2.1 Pro；现有 Seedream 5 / Seedance 2 工作流保留为旧版平铺参数迁移样例。
+
+## 🧩 ComfyUI 兼容性
+
+| ComfyUI / 前端 | Classic Canvas | Nodes 2.0 | 说明 |
+|---|---:|---:|---|
+| 0.25.1 / 1.45.15 | 支持 | 支持 | 最低支持版本；包含旧平铺工作流迁移 |
+| 0.28.0 / 1.45.21 | 支持 | 支持 | 官方稳定分支目标 |
+| 前端 1.46.3+ | 支持 | 支持 | 已覆盖 DynamicCombo 保存与恢复路径 |
+
+模型相关字段使用 ComfyUI 原生 V3 `DynamicCombo`。Vue 下的依赖控件保持可见并在不适用时禁用；Classic Canvas 继续使用紧凑显隐布局。阻塞视频任务同时发送原生进度状态与低版本兼容事件，非阻塞任务只显示提交状态和任务 ID。

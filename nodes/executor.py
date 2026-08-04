@@ -21,7 +21,7 @@ except ImportError:
 import comfy.model_management
 from server import PromptServer
 from .nodes_shared import log_msg, format_api_error, get_text, JimengException, create_white_image_tensor, create_white_video_file, safe_cat_tensors
-from .constants import JIMENG_API_BASE_URL
+from .constants import JIMENG_API_BASE_URL, SEEDANCE_REQUEST_MAX_BYTES
 from .models_config import VIDEO_MODEL_MAP, VIDEO_2_UI_OPTIONS
 from .utils_download import b64_image_to_tensor_async
 
@@ -32,6 +32,69 @@ MIN_DATA_POINTS = 3
 OUTLIER_STD_DEV_FACTOR = 2.0
 RECENT_TASK_COUNT = 5
 RECENT_SPIKE_FACTOR = 1.1
+
+
+def _json_request_default(value):
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(exclude_none=True)
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).decode("utf-8")
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def compact_json_size_bytes(payload) -> int:
+    return len(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=_json_request_default,
+        ).encode("utf-8")
+    )
+
+
+def validate_seedance_request_size(payload, max_bytes=SEEDANCE_REQUEST_MAX_BYTES):
+    request_bytes = compact_json_size_bytes(payload)
+    if request_bytes > max_bytes:
+        raise JimengException(
+            get_text("err_request_body_too_large").format(
+                max_bytes=max_bytes, current_bytes=request_bytes
+            )
+        )
+    return request_bytes
+
+
+def _update_node_progress(node_id, value, max_value, ps_instance=None):
+    if not node_id:
+        return
+    try:
+        from comfy_execution.progress import get_progress_state
+
+        get_progress_state().update_progress(str(node_id), float(value), float(max_value))
+    except Exception:
+        pass
+    if ps_instance:
+        ps_instance.send_sync(
+            "progress",
+            {"value": int(value), "max": int(max_value), "node": node_id},
+        )
+
+
+def _finish_node_progress(node_id, ps_instance=None):
+    if not node_id:
+        return
+    try:
+        from comfy_execution.progress import get_progress_state
+
+        get_progress_state().finish_progress(str(node_id))
+    except Exception:
+        pass
+    if ps_instance:
+        ps_instance.send_sync("progress", {"value": 0, "max": 100, "node": node_id})
 
 def _contains_reference_video(content) -> bool:
     if content is None:
@@ -73,6 +136,7 @@ async def _get_api_estimated_time_async(
 
     if is_seedance2:
         seedance2_with_video_per_sec = {
+            "4k": 90,
             "1080p": 60,
             "720p": 40,
             "480p": 20,
@@ -359,9 +423,20 @@ class JimengGenerationExecutor:
                 if pending_tasks:
                     for tid, error_msg, raw_api_response in failed_tasks_info:
                         self._log_batch_task_failure(error_msg, tid, raw_api_response)
-                    self._create_pending_json(
-                        pending_tasks[0].status, pending_tasks[0].id, len(pending_tasks)
-                    )
+                    pending_ids = [task.id for task in pending_tasks]
+                    if node_id and ps_instance:
+                        ps_instance.send_progress_text(
+                            get_text("progress_non_blocking_pending").format(
+                                task_ids=", ".join(pending_ids)
+                            ),
+                            node_id,
+                        )
+                    return {
+                        "non_blocking": True,
+                        "status": pending_tasks[0].status,
+                        "task_ids": pending_ids,
+                        "pending_count": len(pending_ids),
+                    }
                 else:
                     del non_blocking_cache_dict[node_id]
                     if not self._should_skip_failure_log_before_raise(
@@ -428,6 +503,8 @@ class JimengGenerationExecutor:
             task_kwargs = request_kwargs.copy()
             if is_multi_content:
                 task_kwargs["content"] = content[i % len(content)]
+            if "seedance-2-0" in str(model_name).lower():
+                validate_seedance_request_size(task_kwargs)
             submitted_task_kwargs.append(task_kwargs)
             
             create_coroutines.append(
@@ -518,16 +595,18 @@ class JimengGenerationExecutor:
             task_ids = [t.id for t in tasks_to_poll]
             non_blocking_cache_dict[node_id] = {"task_ids": task_ids}
             if node_id and ps_instance:
-                ps_instance.send_sync(
-                    "jimeng_fake_progress",
-                    {
-                        "value": 0,
-                        "max": estimated_single_task_time,
-                        "node": node_id,
-                    },
+                ps_instance.send_progress_text(
+                    get_text("progress_non_blocking_submitted").format(
+                        task_ids=", ".join(task_ids)
+                    ),
+                    node_id,
                 )
-            self._create_pending_json("submitted", task_ids[0], len(task_ids))
-            return []
+            return {
+                "non_blocking": True,
+                "status": "submitted",
+                "task_ids": task_ids,
+                "pending_count": len(task_ids),
+            }
 
         method_name = get_text(method_key)
         if tasks_to_poll:
@@ -663,15 +742,12 @@ class JimengGenerationExecutor:
                         future_est = max_running_rem + queue_est_time
                         current_max = int(accumulated_running_time + future_est)
 
-                    if node_id and ps_instance:
-                        ps_instance.send_sync(
-                            "progress",
-                            {
-                                "value": int(accumulated_running_time),
-                                "max": current_max,
-                                "node": node_id,
-                            },
-                        )
+                    _update_node_progress(
+                        node_id,
+                        int(accumulated_running_time),
+                        current_max,
+                        ps_instance,
+                    )
 
                     if generation_count == 1:
                         print(
@@ -776,10 +852,7 @@ class JimengGenerationExecutor:
 
         finally:
             print()
-            if node_id and ps_instance:
-                ps_instance.send_sync(
-                    "progress", {"value": 0, "max": 100, "node": node_id}
-                )
+            _finish_node_progress(node_id, ps_instance)
 
         if not self._should_skip_failure_log_before_raise(
             successful_tasks, failed_tasks_info

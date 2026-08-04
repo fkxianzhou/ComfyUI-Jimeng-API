@@ -20,6 +20,11 @@ import torch
 import PIL.Image
 import numpy
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 from comfy_api.latest import io as comfy_io
 from comfy_api.input_impl import VideoFromFile
 
@@ -40,6 +45,7 @@ from .nodes_video_schema import (
     get_common_video_runtime_inputs,
     get_duration_input,
     get_resolution_input,
+    get_seedance2_resolutions,
     get_aspect_ratio_input,
     _calculate_duration_and_frames_args,
     ASPECT_RATIOS,
@@ -60,9 +66,11 @@ from .utils_download import (
 from .executor import (
     JimengGenerationExecutor,
     _get_api_estimated_time_async,
+    _update_node_progress,
+    _finish_node_progress,
     HISTORY_PAGE_SIZE,
 )
-from .models_config import VIDEO_MODEL_MAP
+from .models_config import VIDEO_MODEL_MAP, VIDEO_2_MODEL_RESOLUTIONS
 
 logging.getLogger("volcenginesdkarkruntime").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -127,6 +135,23 @@ def _collect_dynamic_inputs(values=None, kwargs=None, prefix=None):
     return [value for value in collected if value is not None]
 
 
+def validate_seedance2_resolution(model_version, resolution):
+    supported_resolutions = VIDEO_2_MODEL_RESOLUTIONS.get(model_version)
+    if supported_resolutions is None:
+        raise JimengException(
+            get_text("err_model_not_supported").format(model=model_version)
+        )
+    if resolution not in supported_resolutions:
+        raise JimengException(
+            get_text("err_seedance2_resolution_unsupported").format(
+                model=model_version,
+                resolution=resolution,
+                supported=", ".join(supported_resolutions),
+            )
+        )
+    return resolution
+
+
 from .constants import (
     VIDEO_MAX_SEED,
     VIDEO_DEFAULT_TIMEOUT,
@@ -142,6 +167,8 @@ from .constants import (
     REF_VIDEO_MAX_SIZE_MB,
     REF_VIDEO_MIN_PIXELS,
     REF_VIDEO_MAX_PIXELS,
+    REF_VIDEO_MIN_FPS,
+    REF_VIDEO_MAX_FPS,
     REF_AUDIO_MIN_DURATION,
     REF_AUDIO_MAX_DURATION,
     REF_AUDIO_MAX_TOTAL_DURATION,
@@ -373,7 +400,7 @@ class JimengVideoBase:
         if fps and frame_count:
             return frame_count / fps
 
-        if isinstance(stream_source, str) and os.path.exists(stream_source):
+        if cv2 is not None and isinstance(stream_source, str) and os.path.exists(stream_source):
             cap = cv2.VideoCapture(stream_source)
             try:
                 if cap.isOpened():
@@ -389,6 +416,58 @@ class JimengVideoBase:
 
         raise JimengException(get_text("popup_ref_video_invalid"))
 
+    @staticmethod
+    def _read_video_metadata_value(video, method_names):
+        for method_name in method_names:
+            getter = getattr(video, method_name, None)
+            if not callable(getter):
+                continue
+            try:
+                value = getter()
+            except Exception:
+                continue
+            if value not in (None, "", 0, 0.0):
+                return value
+        return None
+
+    def _get_reference_video_metadata(self, video, stream_source):
+        fps = self._read_video_metadata_value(
+            video, ("get_frame_rate", "get_fps", "get_framerate")
+        )
+        video_codec = self._read_video_metadata_value(
+            video, ("get_video_codec", "get_codec", "get_codec_name")
+        )
+        audio_codec = self._read_video_metadata_value(
+            video, ("get_audio_codec", "get_audio_codec_name")
+        )
+
+        if cv2 is not None and isinstance(stream_source, str) and os.path.exists(stream_source):
+            cap = cv2.VideoCapture(stream_source)
+            try:
+                if fps is None:
+                    detected_fps = float(cap.get(cv2.CAP_PROP_FPS) or 0)
+                    if detected_fps > 0:
+                        fps = detected_fps
+                if video_codec is None:
+                    fourcc = int(cap.get(cv2.CAP_PROP_FOURCC) or 0)
+                    if fourcc:
+                        video_codec = "".join(
+                            chr((fourcc >> (8 * idx)) & 0xFF) for idx in range(4)
+                        ).strip("\x00 ")
+            finally:
+                cap.release()
+
+        try:
+            fps = float(fps) if fps is not None else None
+        except (TypeError, ValueError):
+            fps = None
+        return fps, str(video_codec or "").lower(), str(audio_codec or "").lower()
+
+    @staticmethod
+    def _codec_matches(codec, allowed_tokens):
+        normalized = str(codec or "").lower().replace(".", "").replace("-", "")
+        return not normalized or any(token in normalized for token in allowed_tokens)
+
     def _validate_single_reference_video(self, video):
         try:
             container_format = str(video.get_container_format() or "").lower()
@@ -396,12 +475,32 @@ class JimengVideoBase:
             stream_source = video.get_stream_source()
             duration = self._get_video_duration_seconds(video, stream_source)
             size_bytes = self._get_video_stream_size_bytes(stream_source)
+            fps, video_codec, audio_codec = self._get_reference_video_metadata(
+                video, stream_source
+            )
         except Exception as e:
             raise JimengException(get_text("popup_ref_video_invalid").format(msg=str(e)))
 
         if ("mp4" not in container_format) and ("mov" not in container_format):
             raise JimengException(
                 get_text("popup_ref_video_format").format(fmt=container_format or "unknown")
+            )
+
+        if fps is not None and not (REF_VIDEO_MIN_FPS <= fps <= REF_VIDEO_MAX_FPS):
+            raise JimengException(
+                get_text("popup_ref_video_fps_out_of_range").format(
+                    min=REF_VIDEO_MIN_FPS, max=REF_VIDEO_MAX_FPS, fps=f"{fps:.3f}"
+                )
+            )
+        if not self._codec_matches(
+            video_codec, ("h264", "avc1", "avc", "h265", "hevc")
+        ):
+            raise JimengException(
+                get_text("popup_ref_video_codec_unsupported").format(codec=video_codec)
+            )
+        if not self._codec_matches(audio_codec, ("aac", "mp3", "mpeg3")):
+            raise JimengException(
+                get_text("popup_ref_audio_codec_unsupported").format(codec=audio_codec)
             )
 
         if (
@@ -762,6 +861,15 @@ class JimengVideoBase:
                 return_last_frame=return_last_frame,
                 on_tasks_created=on_tasks_created,
             )
+
+            if isinstance(successful_tasks, dict) and successful_tasks.get(
+                "non_blocking"
+            ):
+                return comfy_io.NodeOutput(
+                    None,
+                    None,
+                    json.dumps(successful_tasks, ensure_ascii=False, indent=2),
+                )
 
             if not successful_tasks and ignore_errors:
                  dummy_video = None
@@ -1197,34 +1305,45 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
     支持文本、图片、视频、音频多模态参考，以及视频编辑/延长等工作流。
     """
 
+    @staticmethod
+    def _model_inputs(model_version):
+        return [
+            comfy_io.String.Input("prompt", multiline=True, default=""),
+            *get_common_video_seed_inputs(),
+            get_resolution_input(
+                default="720p", options=get_seedance2_resolutions(model_version)
+            ),
+            get_aspect_ratio_input(default="adaptive", include_adaptive=True),
+            comfy_io.Boolean.Input("auto_duration", default=False),
+            get_duration_input(default=5, min_val=4, max_val=15, is_int=True),
+            comfy_io.Boolean.Input("generate_audio", default=True),
+            comfy_io.Boolean.Input("enable_web_search", default=False),
+            *get_common_video_runtime_inputs(include_offline=False),
+        ]
+
     @classmethod
     def define_schema(cls) -> comfy_io.Schema:
         return comfy_io.Schema(
             node_id="JimengSeedance2",
             display_name="Jimeng Seedance 2.0",
             category=GLOBAL_CATEGORY,
+            description=(
+                "Generate or edit video with Seedance 2.0, Fast, or Mini. "
+                "The standard model supports up to 4K output."
+            ),
             is_output_node=True,
             is_experimental=True,
             inputs=[
                 JimengClientType.Input("client"),
-                comfy_io.Combo.Input(
+                comfy_io.DynamicCombo.Input(
                     "model_version",
-                    options=VIDEO_2_UI_OPTIONS,
-                    default=VIDEO_2_UI_OPTIONS[0],
+                    options=[
+                        comfy_io.DynamicCombo.Option(
+                            model_version, cls._model_inputs(model_version)
+                        )
+                        for model_version in VIDEO_2_UI_OPTIONS
+                    ],
                 ),
-                comfy_io.String.Input("prompt", multiline=True, default=""),
-            ]
-            + get_common_video_seed_inputs()
-            + [
-                get_resolution_input(default="720p", support_1080p=True),
-                get_aspect_ratio_input(default="adaptive", include_adaptive=True),
-                comfy_io.Boolean.Input("auto_duration", default=False),
-                get_duration_input(default=5, min_val=4, max_val=15, is_int=True),
-                comfy_io.Boolean.Input("generate_audio", default=True),
-                comfy_io.Boolean.Input("enable_web_search", default=False),
-            ]
-            + get_common_video_runtime_inputs(include_offline=False)
-            + [
                 comfy_io.Image.Input("first_frame_image", optional=True),
                 comfy_io.Image.Input("last_frame_image", optional=True),
                 _create_named_autogrow_input(
@@ -1264,19 +1383,19 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         cls,
         client,
         model_version,
-        prompt,
-        generate_audio,
-        enable_web_search,
-        auto_duration,
-        duration,
-        resolution,
-        aspect_ratio,
-        enable_random_seed,
-        seed,
-        generation_count,
-        filename_prefix,
-        save_last_frame_batch,
-        non_blocking,
+        prompt="",
+        generate_audio=True,
+        enable_web_search=False,
+        auto_duration=False,
+        duration=5,
+        resolution="720p",
+        aspect_ratio="adaptive",
+        enable_random_seed=True,
+        seed=0,
+        generation_count=1,
+        filename_prefix="Jimeng/Video/Batch/Seedance",
+        save_last_frame_batch=False,
+        non_blocking=False,
         first_frame_image=None,
         last_frame_image=None,
         ref_images=None,
@@ -1285,6 +1404,29 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         **kwargs,
     ) -> comfy_io.NodeOutput:
         node_id = cls.hidden.unique_id
+
+        if isinstance(model_version, dict):
+            model_config = model_version
+            model_version = model_config.get("model_version", VIDEO_2_UI_OPTIONS[0])
+            prompt = model_config.get("prompt", prompt)
+            generate_audio = model_config.get("generate_audio", generate_audio)
+            enable_web_search = model_config.get("enable_web_search", enable_web_search)
+            auto_duration = model_config.get("auto_duration", auto_duration)
+            duration = model_config.get("duration", duration)
+            resolution = model_config.get("resolution", resolution)
+            aspect_ratio = model_config.get("aspect_ratio", aspect_ratio)
+            enable_random_seed = model_config.get(
+                "enable_random_seed", enable_random_seed
+            )
+            seed = model_config.get("seed", seed)
+            generation_count = model_config.get("generation_count", generation_count)
+            filename_prefix = model_config.get("filename_prefix", filename_prefix)
+            save_last_frame_batch = model_config.get(
+                "save_last_frame_batch", save_last_frame_batch
+            )
+            non_blocking = model_config.get("non_blocking", non_blocking)
+
+        validate_seedance2_resolution(model_version, resolution)
 
         helper = JimengVideoBase()
         helper.NON_BLOCKING_TASK_CACHE = cls.NON_BLOCKING_TASK_CACHE
@@ -1575,7 +1717,7 @@ class JimengProgressTest(comfy_io.ComfyNode):
                 ),
                 comfy_io.Combo.Input(
                     "test_resolution",
-                    options=["720p", "1080p", "480p"],
+                    options=["720p", "1080p", "4k", "480p"],
                     default="720p",
                 ),
             ],
@@ -1673,22 +1815,18 @@ class JimengProgressTest(comfy_io.ComfyNode):
         step_interval = float(total_seconds) / float(total_steps)
 
         elapsed = 0.0
-        for i in range(total_steps + 1):
-            comfy.model_management.throw_exception_if_processing_interrupted()
-
-            if ps_instance and node_id:
-                ps_instance.send_sync(
-                    "progress",
-                    {
-                        "value": int(elapsed),
-                        "max": int(total_seconds),
-                        "node": node_id,
-                    },
+        try:
+            for i in range(total_steps + 1):
+                comfy.model_management.throw_exception_if_processing_interrupted()
+                _update_node_progress(
+                    node_id, int(elapsed), int(total_seconds), ps_instance
                 )
 
-            if i < total_steps:
-                await asyncio.sleep(step_interval)
-                elapsed += step_interval
+                if i < total_steps:
+                    await asyncio.sleep(step_interval)
+                    elapsed += step_interval
+        finally:
+            _finish_node_progress(node_id, ps_instance)
 
         return comfy_io.NodeOutput("Jimeng Progress Test Finished")
 

@@ -126,6 +126,10 @@
         "name": "水印",
         "tooltip": "是否在生成的图像上添加水印。"
       },
+      "thinking": {
+        "name": "提示词优化",
+        "tooltip": "开启后会在生成前优化提示词。仅 Seedream 4.0 支持；Seedream 4.5 不发送此参数。"
+      },
       "images": {
         "name": "图像 1",
         "tooltip": "用于图生图的参考图像。"
@@ -144,7 +148,7 @@
   },
   "JimengSeedream5": {
     "display_name": "图像生成（Seedream 5）",
-    "description": "使用 Seedream 5 模型生成图像，支持单图或组图（自动）模式。",
+    "description": "使用 Seedream 5 Pro 或 Lite 生成图像；Pro 支持提示词优化，Lite 支持组图与联网搜索。",
     "inputs": {
       "client": {
         "name": "客户端",
@@ -153,6 +157,40 @@
       "model_version": {
         "name": "模型版本",
         "tooltip": "选择要使用的 Seedream5 模型版本。"
+      },
+      "model_version_prompt": {
+        "name": "提示词"
+      },
+      "model_version_size": {
+        "name": "尺寸"
+      },
+      "model_version_width": {
+        "name": "宽度"
+      },
+      "model_version_height": {
+        "name": "高度"
+      },
+      "model_version_seed": {
+        "name": "种子"
+      },
+      "model_version_enable_group_generation": {
+        "name": "启用组图生成"
+      },
+      "model_version_max_images": {
+        "name": "最大图像数"
+      },
+      "model_version_enable_web_search": {
+        "name": "启用联网搜索"
+      },
+      "model_version_thinking": {
+        "name": "提示词优化",
+        "tooltip": "开启后会在生成前优化提示词；Seedream 5 Pro 使用参考图时必须开启。"
+      },
+      "model_version_generation_count": {
+        "name": "生成数量"
+      },
+      "model_version_watermark": {
+        "name": "水印"
       },
       "prompt": {
         "name": "提示词",
@@ -187,7 +225,11 @@
       },
       "seed": {
         "name": "种子",
-        "tooltip": "Seedream5 模型不支持该参数，此功能仅用于刷新ComfyUI缓存"
+        "tooltip": "用于控制生成内容的随机性；相同请求和种子通常得到相近结果。"
+      },
+      "thinking": {
+        "name": "提示词优化",
+        "tooltip": "生成前优化提示词。Seedream 5 Pro 使用参考图时必须开启。"
       },
       "generation_count": {
         "name": "生成数量",
@@ -199,7 +241,7 @@
       },
       "images": {
         "name": "图像 1",
-        "tooltip": "用于图生图的参考图像。"
+        "tooltip": "用于图生图的参考图像。Seedream 5 Pro 最多接收 10 张。"
       }
     },
     "outputs": {
@@ -403,7 +445,7 @@
   },
   "JimengSeedance2": {
     "display_name": "视频生成（Seedance 2.0）",
-    "description": "使用 Seedance 2.0 系列模型生成或编辑视频，支持图像、视频、音频多模态参考。",
+    "description": "使用 Seedance 2.0、Fast 或 Mini 生成和编辑视频；标准版最高支持 4K。",
     "inputs": {
       "client": {
         "name": "客户端",
@@ -412,6 +454,45 @@
       "model_version": {
         "name": "模型版本",
         "tooltip": "选择要使用的 Seedance 2.0 模型版本。"
+      },
+      "model_version_prompt": {
+        "name": "提示词"
+      },
+      "model_version_enable_random_seed": {
+        "name": "使用随机种子"
+      },
+      "model_version_seed": {
+        "name": "种子"
+      },
+      "model_version_resolution": {
+        "name": "分辨率"
+      },
+      "model_version_aspect_ratio": {
+        "name": "宽高比"
+      },
+      "model_version_auto_duration": {
+        "name": "智能时长"
+      },
+      "model_version_duration": {
+        "name": "时长 (秒)"
+      },
+      "model_version_generate_audio": {
+        "name": "生成音频"
+      },
+      "model_version_enable_web_search": {
+        "name": "联网搜索"
+      },
+      "model_version_generation_count": {
+        "name": "生成数量"
+      },
+      "model_version_filename_prefix": {
+        "name": "文件名前缀"
+      },
+      "model_version_save_last_frame_batch": {
+        "name": "保存尾帧"
+      },
+      "model_version_non_blocking": {
+        "name": "非阻塞模式"
       },
       "prompt": {
         "name": "提示词",
@@ -427,7 +508,7 @@
       },
       "resolution": {
         "name": "分辨率",
-        "tooltip": "视频的分辨率。"
+        "tooltip": "标准版支持 480p、720p、1080p、4K；Fast 和 Mini 支持 480p、720p。"
       },
       "aspect_ratio": {
         "name": "宽高比",
@@ -714,8 +795,8 @@
     }
   },
   "JimengVisualUnderstanding": {
-    "display_name": "视觉理解（Seed 2.0）",
-    "description": "使用 Seed 2.0 模型进行视觉理解对话，支持图像/视频输入和多轮对话。",
+    "display_name": "视觉理解（Seed 2.1 / 2.0）",
+    "description": "默认使用 Seed 2.1 Pro 进行视觉理解，并保留 Seed 2.0 系列兼容旧工作流。",
     "inputs": {
       "client": {
         "name": "客户端",

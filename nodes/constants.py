@@ -16,6 +16,8 @@ MIN_IMAGE_PIXELS_V4_5 = 3686400
 MAX_IMAGE_PIXELS_V4 = 4096 * 4096
 MIN_IMAGE_PIXELS_V5 = 3686400
 MAX_IMAGE_PIXELS_V5 = 10404496
+MIN_IMAGE_PIXELS_V5_PRO = 1280 * 720
+MAX_IMAGE_PIXELS_V5_PRO = 2048 * 2048
 MIN_ASPECT_RATIO = 1.0 / 16.0
 MAX_ASPECT_RATIO = 16.0
 
@@ -35,9 +37,12 @@ REF_MEDIA_MAX_DURATION = 15.2
 REF_VIDEO_MIN_DURATION = REF_MEDIA_MIN_DURATION
 REF_VIDEO_MAX_DURATION = REF_MEDIA_MAX_DURATION
 REF_VIDEO_MAX_TOTAL_DURATION = REF_MEDIA_MAX_DURATION
-REF_VIDEO_MAX_SIZE_MB = 50.0
+REF_VIDEO_MAX_SIZE_MB = 200.0
 REF_VIDEO_MIN_PIXELS = 409600
-REF_VIDEO_MAX_PIXELS = 927408
+REF_VIDEO_MAX_PIXELS = 8295044
+REF_VIDEO_MIN_FPS = 24.0
+REF_VIDEO_MAX_FPS = 60.0
+SEEDANCE_REQUEST_MAX_BYTES = 64 * 1024 * 1024
 REF_AUDIO_MIN_DURATION = REF_MEDIA_MIN_DURATION
 REF_AUDIO_MAX_DURATION = REF_MEDIA_MAX_DURATION
 REF_AUDIO_MAX_TOTAL_DURATION = REF_MEDIA_MAX_DURATION
@@ -49,12 +54,13 @@ VIDEO_MIN_FRAMES = 29
 VIDEO_MAX_FRAMES = 289
 VIDEO_FRAME_STEP = 4.0
 VIDEO_BASE_FRAMES = 25.0
-VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"]
+VIDEO_RESOLUTIONS = ["480p", "720p", "1080p", "4k"]
 # 视频分辨率对应的像素总量估算
 VIDEO_RESOLUTION_PIXELS = {
     "480p": 409920,
     "720p": 921600,
     "1080p": 2073600,
+    "4k": 8294400,
 }
 DEFAULT_FILENAME_PREFIX = "Jimeng/Video/Batch/Seedance"
 
@@ -79,6 +85,8 @@ LOG_TRANSLATIONS = {
         "est_recent": "近期负载调整",
         "task_submitted_est": "任务已提交。预估生成时间: {time}s (预估方式: {method})",
         "task_info_simple": "任务 ID: {task_id} | 模型: {model}",
+        "progress_non_blocking_submitted": "已提交任务：{task_ids}",
+        "progress_non_blocking_pending": "任务处理中：{task_ids}",
         "batch_submit_start": "正在提交 {count} 个任务...",
         "batch_submit_result": "提交完成。成功: {created}，失败: {failed}。",
         "batch_failed_summary": "⚠️ {count} 个任务创建失败。原因汇总:",
@@ -144,6 +152,9 @@ LOG_TRANSLATIONS = {
         "popup_ref_video_duration_out_of_range": "单个参考视频时长需在 {min}s 到 {max}s 之间。当前: {duration}s",
         "popup_ref_video_total_duration_exceeded": "参考视频总时长不能超过 {max}s。当前: {duration}s",
         "popup_ref_video_size_exceeded": "单个参考视频大小不能超过 {max_mb}MB。当前: {size_mb}MB",
+        "popup_ref_video_fps_out_of_range": "参考视频帧率需在 {min} 到 {max} FPS 之间。当前: {fps} FPS",
+        "popup_ref_video_codec_unsupported": "参考视频编码仅支持 H.264/H.265。当前: {codec}",
+        "popup_ref_audio_codec_unsupported": "参考视频中的音频编码仅支持 AAC/MP3。当前: {codec}",
         "popup_ref_audio_duration_out_of_range": "单个参考音频时长需在 {min}s 到 {max}s 之间。当前: {duration}s",
         "popup_ref_audio_total_duration_exceeded": "参考音频总时长不能超过 {max}s。当前: {duration}s",
         "popup_ref_audio_size_exceeded": "单个参考音频大小不能超过 {max_mb}MB。当前: {size_mb}MB",
@@ -153,7 +164,12 @@ LOG_TRANSLATIONS = {
         # 图片节点
         "err_pixels_range": "总像素数必须在 {min} 和 {max} 之间。当前值: {current}",
         "err_aspect_ratio": "宽高比必须在 {min} 和 {max} 之间。当前值: {current}",
+        "err_size_multiple_16": "自定义宽高必须是 16 的倍数。",
         "err_download_img": "下载生成的图像失败。",
+        "err_model_not_supported": "当前节点不支持模型 {model}。",
+        "err_seedance2_resolution_unsupported": "模型 {model} 不支持 {resolution}；可选分辨率为 {supported}。",
+        "err_request_body_too_large": "最终请求体超过 64 MiB 限制（上限 {max_bytes} 字节，当前 {current_bytes} 字节）。请减少参考素材。",
+        "err_seedream5_pro_thinking_required": "Seedream 5 Pro 使用参考图时必须开启思考模式。",
         "err_gen_model": "模型 {model} 生成失败: {e}",
         "err_img_limit_10": "输入图像数量不能超过 10 张。",
         "err_img_limit_15": "输入图像数 ({n}) 与最大生成数 ({max}) 之和不能超过 15。",
@@ -218,6 +234,9 @@ LOG_TRANSLATIONS = {
             "InvalidImageDetail": "image_url 中的 detail 参数值无效，只接受 'auto', 'high', 'low'。",
             "MissingParameter": "请求缺少必要参数，请查阅 API 文档。",
             "InvalidParameter": "请求包含非法参数，请查阅 API 文档。",
+            "RequestBodyTooLarge": "请求体超过服务限制，请减少参考素材后重试。",
+            "ModelParameterNotSupported": "当前模型不支持请求中的一个或多个参数，请调整模型相关设置后重试。",
+            "MediaInvalid": "参考素材不符合格式、编码、尺寸、时长或帧率限制，请检查素材。",
             "InvalidResolutionParameter": "当前模型不支持该分辨率，请调整 resolution 后重试。",
             "LastFrameNotSupported": "当前模型不支持尾帧控制，请移除尾帧图片或更换支持的模型。",
             "RefImageNotSupported": "当前模型不支持该类型的参考图输入。",
@@ -241,6 +260,8 @@ LOG_TRANSLATIONS = {
         "est_recent": "Recent Load Adjustment",
         "task_submitted_est": "Task submitted. Est. time: {time}s (Method: {method})",
         "task_info_simple": "Task ID: {task_id} | Model: {model}",
+        "progress_non_blocking_submitted": "Submitted task(s): {task_ids}",
+        "progress_non_blocking_pending": "Task(s) still processing: {task_ids}",
         "batch_submit_start": "Submitting batch of {count} tasks (Model: {model})...",
         "batch_submit_result": "Submission complete. Created: {created}, Failed: {failed}.",
         "batch_failed_summary": "⚠️ {count} tasks failed to create. Reason summary:",
@@ -302,6 +323,9 @@ LOG_TRANSLATIONS = {
         "popup_ref_video_duration_out_of_range": "Parameter Error: Single reference video duration must be between {min}s and {max}s. Current: {duration}s",
         "popup_ref_video_total_duration_exceeded": "Parameter Error: Total reference video duration cannot exceed {max}s. Current: {duration}s",
         "popup_ref_video_size_exceeded": "Parameter Error: Single reference video size cannot exceed {max_mb}MB. Current: {size_mb}MB",
+        "popup_ref_video_fps_out_of_range": "Parameter Error: Reference video frame rate must be between {min} and {max} FPS. Current: {fps} FPS",
+        "popup_ref_video_codec_unsupported": "Parameter Error: Reference video codec must be H.264 or H.265. Current: {codec}",
+        "popup_ref_audio_codec_unsupported": "Parameter Error: Audio codec in the reference video must be AAC or MP3. Current: {codec}",
         "popup_ref_audio_duration_out_of_range": "Parameter Error: Single reference audio duration must be between {min}s and {max}s. Current: {duration}s",
         "popup_ref_audio_total_duration_exceeded": "Parameter Error: Total reference audio duration cannot exceed {max}s. Current: {duration}s",
         "popup_ref_audio_size_exceeded": "Parameter Error: Single reference audio size cannot exceed {max_mb}MB. Current: {size_mb}MB",
@@ -309,7 +333,12 @@ LOG_TRANSLATIONS = {
         "popup_prepare_failed": "Failed to prepare task: {e}",
         "err_pixels_range": "Parameter Error: Total pixels must be between {min} and {max}. Your current: {current}",
         "err_aspect_ratio": "Parameter Error: Aspect ratio must be between {min} and {max}. Your current: {current}",
+        "err_size_multiple_16": "Parameter Error: Custom width and height must be multiples of 16.",
         "err_download_img": "Error: Failed to download the generated image.",
+        "err_model_not_supported": "This node does not support model {model}.",
+        "err_seedance2_resolution_unsupported": "Model {model} does not support {resolution}. Supported resolutions: {supported}.",
+        "err_request_body_too_large": "The final request body exceeds the 64 MiB limit (maximum {max_bytes} bytes; current {current_bytes} bytes). Reduce reference media.",
+        "err_seedream5_pro_thinking_required": "Thinking must be enabled when Seedream 5 Pro uses reference images.",
         "err_gen_model": "Failed to generate image with model {model}: {e}",
         "err_img_limit_10": "Parameter Error: The number of input images cannot exceed 10.",
         "err_img_limit_15": "Parameter Error: The sum of input images ({n}) and max generated images ({max}) cannot exceed 15.",
@@ -370,6 +399,9 @@ LOG_TRANSLATIONS = {
             "InvalidImageDetail": "Invalid Image Detail parameter (400).",
             "MissingParameter": "Missing Parameter (400).",
             "InvalidParameter": "Invalid Parameter (400).",
+            "RequestBodyTooLarge": "Request body exceeds the service limit. Reduce reference media and try again.",
+            "ModelParameterNotSupported": "One or more request parameters are not supported by the selected model.",
+            "MediaInvalid": "Reference media violates a format, codec, size, duration, or frame-rate limit.",
             "InvalidResolutionParameter": "Invalid resolution for current model (400). Please choose a supported resolution.",
             "LastFrameNotSupported": "Last frame input is not supported by this model. Please remove it or use the Pro model.",
             "RefImageNotSupported": "Reference image input is not supported by this model.",

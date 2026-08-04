@@ -31,21 +31,6 @@ app.registerExtension({
             }
         });
 
-        api.addEventListener("jimeng_fake_progress", ({ detail }) => {
-            const { max, node } = detail;
-            const graphNode = app.graph.getNodeById(node);
-
-            if (graphNode && graphNode.comfyClass.startsWith("Jimeng")) {
-                graphNode.jimeng_progress_mode = "auto";
-                graphNode.jimeng_progress_startTime = performance.now();
-                graphNode.jimeng_progress_duration = Math.max(max, 1) * 1000;
-                graphNode.jimeng_progress_ratio = 0;
-                graphNode.jimeng_progress_text = "";
-
-                app.graph.setDirtyCanvas(true, false);
-            }
-        });
-
         api.addEventListener("executed", ({ detail }) => {
              const graphNode = app.graph.getNodeById(detail.node);
              if (graphNode && graphNode.comfyClass.startsWith("Jimeng")) {
@@ -66,25 +51,6 @@ app.registerExtension({
             
             node.onDrawForeground = function(ctx) {
                 if (origOnDrawForeground) origOnDrawForeground.apply(this, arguments);
-
-                if (this.jimeng_progress_mode === "auto" && this.jimeng_progress_startTime) {
-                    const now = performance.now();
-                    const duration = this.jimeng_progress_duration || 1000;
-                    const elapsed = now - this.jimeng_progress_startTime;
-                    const ratio = elapsed / duration;
-
-                    if (ratio >= 1) {
-                        this.jimeng_progress_mode = null;
-                        this.jimeng_progress_startTime = 0;
-                        this.jimeng_progress_duration = 0;
-                        this.jimeng_progress_ratio = 0;
-                        this.jimeng_progress_text = "";
-                    } else if (ratio > 0) {
-                        this.jimeng_progress_ratio = ratio;
-                        this.jimeng_progress_text = `${Math.round(elapsed / 1000)}s / ${Math.round(duration / 1000)}s`;
-                        app.graph.setDirtyCanvas(true, false);
-                    }
-                }
 
                 if (this.jimeng_progress_ratio > 0 && this.jimeng_progress_ratio < 1) {
                     const w = this.size[0];

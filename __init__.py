@@ -3,6 +3,7 @@ import traceback
 import logging
 import subprocess
 import locale
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from .nodes.constants import LOG_TRANSLATIONS
 
@@ -113,36 +114,56 @@ def get_init_text(key, **kwargs):
 def check_and_update_dependencies():
     """
     检查并自动安装依赖项。
-    仅在运行时模块缺失时触发安装，安装源统一使用 requirements.txt。
+    在运行时模块缺失或版本低于最低要求时触发安装。
     """
     package_name = "volcengine-python-sdk[ark]"
+    distribution_name = "volcengine-python-sdk"
+    minimum_version = "5.0.41"
     requirements_file = Path(__file__).with_name("requirements.txt")
 
     try:
         import volcenginesdkarkruntime
-        return True
+        try:
+            current_version = package_version(distribution_name)
+        except PackageNotFoundError:
+            current_version = "0"
+        def _numeric_version(value):
+            parts = []
+            for item in str(value).split("."):
+                digits = "".join(char for char in item if char.isdigit())
+                parts.append(int(digits or 0))
+            return tuple((parts + [0, 0, 0])[:3])
+
+        if _numeric_version(current_version) >= _numeric_version(minimum_version):
+            return True
+        print(
+            get_init_text(
+                "init_sdk_ver_low", current=current_version, min=minimum_version
+            )
+        )
     except ModuleNotFoundError:
         print(get_init_text("init_sdk_not_found", pkg=package_name))
-        try:
-            subprocess.check_call(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--disable-pip-version-check",
-                    "-r",
-                    str(requirements_file),
-                ]
-            )
-            import volcenginesdkarkruntime
-            print(get_init_text("init_sdk_install_ok"))
-            return True
-        except Exception as e:
-            print(get_init_text("init_sdk_install_fail", e=e))
-            return False
     except Exception as e:
         print(get_init_text("init_dep_check_err", e=e))
+        return False
+
+    try:
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "-r",
+                str(requirements_file),
+            ]
+        )
+        import volcenginesdkarkruntime
+        print(get_init_text("init_sdk_install_ok"))
+        return True
+    except Exception as e:
+        print(get_init_text("init_sdk_install_fail", e=e))
         return False
 
 _dependencies_ready = check_and_update_dependencies()

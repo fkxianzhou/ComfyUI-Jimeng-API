@@ -37,6 +37,10 @@ class JimengVisualUnderstanding(comfy_io.ComfyNode):
             node_id="JimengVisualUnderstanding",
             display_name="Jimeng Visual Understanding",
             category=GLOBAL_CATEGORY,
+            description=(
+                "Understand images and video with Seed 2.1 Pro by default, while "
+                "retaining Seed 2.0 models for existing workflows."
+            ),
             is_experimental=True,
             inputs=[
                 JimengClientType.Input("client"),

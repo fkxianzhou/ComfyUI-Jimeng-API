@@ -36,6 +36,7 @@ const VUE_NODES_ENABLED = isVueNodesEnabled();
  * @type {string[]}
  */
 const TARGET_WIDGETS = [
+    'model_version',
     'size',
     'enable_group_generation',
     'generation_count',
@@ -45,8 +46,23 @@ const TARGET_WIDGETS = [
     'draft_mode',
     'reuse_last_draft_task',
     'key_name',
-    'reasoning_mode'
+    'reasoning_mode',
+    'thinking'
 ];
+
+const LEGACY_WIDGET_ORDERS = {
+    JimengSeedance2: [
+        'model_version', 'prompt', 'enable_random_seed', 'seed',
+        'control_after_generate', 'resolution', 'aspect_ratio', 'auto_duration',
+        'duration', 'generate_audio', 'enable_web_search', 'generation_count',
+        'filename_prefix', 'save_last_frame_batch', 'non_blocking'
+    ],
+    JimengSeedream5: [
+        'model_version', 'prompt', 'size', 'width', 'height', 'seed',
+        'control_after_generate', 'enable_group_generation', 'max_images',
+        'enable_web_search', 'generation_count', 'watermark'
+    ],
+};
 
 /**
  * 节点底部预留的缓冲高度
@@ -62,7 +78,13 @@ const BOTTOM_PADDING = 8;
  */
 function findWidgetByName(node, name) {
     if (!node.widgets) return null;
-    return node.widgets.find((w) => w.name === name);
+    return node.widgets.find((w) =>
+        w.name === name || String(w.name || '').endsWith(`.${name}`)
+    );
+}
+
+function getWidgetBaseName(widget) {
+    return String(widget?.name || '').split('.').pop();
 }
 
 /**
@@ -72,7 +94,7 @@ function findWidgetByName(node, name) {
  * @returns {boolean} 是否存在已链接的同名输入
  */
 function isWidgetLinked(node, name) {
-    return node.inputs ? node.inputs.some((input) => input.name === name && input.link !== null) : false;
+    return node.inputs ? node.inputs.some((input) => input.name === name && input.link != null) : false;
 }
 
 /**
@@ -84,6 +106,17 @@ function isWidgetLinked(node, name) {
  */
 function toggleWidget(node, widget, show) {
     if (!widget) return false;
+
+    if (VUE_NODES_ENABLED) {
+        const disabled = !show;
+        const changed = widget.disabled !== disabled || widget.options?.disabled !== disabled;
+        widget.disabled = disabled;
+        widget.options = widget.options || {};
+        widget.options.disabled = disabled;
+        if (widget.inputEl) widget.inputEl.disabled = disabled;
+        if (changed) app.graph.setDirtyCanvas(true, true);
+        return changed;
+    }
 
     // 如果组件已被转换为输入且已链接，则不进行隐藏操作
     if (isWidgetLinked(node, widget.name)) return false;
@@ -121,6 +154,7 @@ function toggleWidget(node, widget, show) {
  * @param {number} [extraHeight=0] - 用户手动拉伸的额外高度补偿值
  */
 function updateNodeHeight(node, extraHeight = 0) {
+    if (VUE_NODES_ENABLED) return;
     if (node.flags?.collapsed) return;
 
     // 计算基础最小所需尺寸
@@ -139,6 +173,7 @@ function updateNodeHeight(node, extraHeight = 0) {
  * @returns {boolean} 是否发生了变更
  */
 function applyBottomPadding(node) {
+    if (VUE_NODES_ENABLED) return false;
     if (!node.widgets) return false;
 
     // 1. 找到最后一个可见组件
@@ -201,6 +236,47 @@ const AUTOGROW_LABEL_RULES = {
     ],
 };
 
+// ComfyUI frontend 1.45.x creates DynamicCombo children with names such as
+// `model_version.seed`. The normal locale keys are therefore not reused for
+// those children. Keep a small runtime fallback for Vue Nodes and for older
+// frontends that do not refresh translated labels after a model switch.
+const DYNAMIC_WIDGET_ZH_LABELS = {
+    JimengSeedream5: {
+        prompt: "提示词",
+        size: "尺寸",
+        width: "宽度",
+        height: "高度",
+        seed: "种子",
+        enable_group_generation: "启用组图生成",
+        max_images: "最大图像数",
+        enable_web_search: "启用联网搜索",
+        thinking: "提示词优化",
+        generation_count: "生成数量",
+        watermark: "水印",
+    },
+    JimengSeedance2: {
+        prompt: "提示词",
+        enable_random_seed: "使用随机种子",
+        seed: "种子",
+        resolution: "分辨率",
+        aspect_ratio: "宽高比",
+        auto_duration: "智能时长",
+        duration: "时长 (秒)",
+        generate_audio: "生成音频",
+        enable_web_search: "联网搜索",
+        generation_count: "生成数量",
+        filename_prefix: "文件名前缀",
+        save_last_frame_batch: "保存尾帧",
+        non_blocking: "非阻塞模式",
+    },
+};
+
+const DYNAMIC_WIDGET_ZH_TOOLTIPS = {
+    JimengSeedream5: {
+        thinking: "开启后会在生成前优化提示词；Seedream 5 Pro 使用参考图时必须开启。",
+    },
+};
+
 function getAutogrowLabelRules(node) {
     if (!node || !node.comfyClass) return [];
     return AUTOGROW_LABEL_RULES[node.comfyClass] || [];
@@ -256,16 +332,104 @@ function refreshAutogrowInputLabels(node) {
     }
 }
 
+function restoreLegacyWidgetValues(node, data) {
+    const order = LEGACY_WIDGET_ORDERS[node.comfyClass];
+    const values = data?.widgets_values;
+    if (!order || !Array.isArray(values) || values.length < 2) return;
+    if (node.comfyClass === 'JimengSeedream5' && values[0] === 'doubao-seedream-5.0-pro') {
+        setTimeout(() => installWidgetWatchers(node), 0);
+        setTimeout(() => {
+            installWidgetWatchers(node);
+            if (Array.isArray(data?.size) && data.size.length >= 2) {
+                node.setSize?.([data.size[0], data.size[1]]);
+            }
+        }, 120);
+        return;
+    }
+
+    const legacyValues = new Map();
+    order.forEach((name, index) => {
+        if (index < values.length) legacyValues.set(name, values[index]);
+    });
+
+    const applyValues = () => {
+        for (const [name, value] of legacyValues.entries()) {
+            const target = findWidgetByName(node, name);
+            if (target && value !== undefined && target.value !== value) {
+                target.value = value;
+            }
+        }
+    };
+
+    const migrateLinkedInputs = () => {
+        if (!node.inputs) return;
+        for (const name of order.slice(1)) {
+            const legacyIndex = node.inputs.findIndex((input) => input.name === name);
+            const dynamicIndex = node.inputs.findIndex(
+                (input) => input.name === `model_version.${name}`
+            );
+            if (legacyIndex < 0 || dynamicIndex < 0 || legacyIndex === dynamicIndex) continue;
+
+            const legacyInput = node.inputs[legacyIndex];
+            const dynamicInput = node.inputs[dynamicIndex];
+            if (legacyInput.link != null && dynamicInput.link == null) {
+                dynamicInput.link = legacyInput.link;
+            }
+            node.inputs.splice(legacyIndex, 1);
+        }
+
+        node.inputs.forEach((input, index) => {
+            if (input.link == null) return;
+            const links = node.graph?.links;
+            const link = links?.get?.(input.link) ?? links?.[input.link];
+            if (link) link.target_slot = index;
+        });
+        node._setConcreteSlots?.();
+    };
+
+    const restoreSize = () => {
+        if (!Array.isArray(data?.size) || data.size.length < 2) return;
+        node.setSize?.([data.size[0], data.size[1]]);
+    };
+
+    const modelWidget = findWidgetByName(node, 'model_version');
+    if (modelWidget && legacyValues.has('model_version')) {
+        const selectedModel = legacyValues.get('model_version');
+        modelWidget.value = selectedModel;
+    }
+    queueMicrotask(applyValues);
+    setTimeout(applyValues, 0);
+    setTimeout(() => {
+        applyValues();
+        migrateLinkedInputs();
+        restoreSize();
+    }, 120);
+    setTimeout(() => installWidgetWatchers(node), 0);
+    setTimeout(() => installWidgetWatchers(node), 120);
+}
+
+function refreshReferenceThinkingState(node) {
+    if (node.comfyClass !== 'JimengSeedream5') return;
+    const thinkingWidget = findWidgetByName(node, 'thinking');
+    if (!thinkingWidget) return;
+    const hasReference = (node.inputs || []).some((input) =>
+        /(?:^|\.)image_\d+$/.test(String(input?.name || '')) && input.link != null
+    );
+    if (hasReference && thinkingWidget.value !== true) thinkingWidget.value = true;
+    toggleWidget(node, thinkingWidget, !hasReference);
+}
+
 /**
  * 执行组件联动逻辑
  * @param {object} node - 节点实例
  * @param {object} widget - 触发变更的组件
  */
 function widgetLogic(node, widget) {
+    const widgetName = getWidgetBaseName(widget);
     // 1. 计算布局变更前的高度差（Current Height Delta）
     // 用于在重绘时恢复用户手动拉伸的尺寸
     let extraHeight = 0;
-    if (node.size && node.computeSize && !node.flags?.collapsed) {
+    if (!VUE_NODES_ENABLED && node.size && node.computeSize && !node.flags?.collapsed) {
         const currentMinHeight = node.computeSize()[1];
         const currentActualHeight = node.size[1];
         // 修正非正值，防止计算异常
@@ -276,7 +440,7 @@ function widgetLogic(node, widget) {
 
     // 处理图像生成节点逻辑
     if (node.comfyClass === "JimengSeedream3" || node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
-        if (widget.name === 'size') {
+        if (widgetName === 'size') {
             const isCustom = widget.value === "Custom";
             const widthWidget = findWidgetByName(node, 'width');
             const heightWidget = findWidgetByName(node, 'height');
@@ -286,11 +450,17 @@ function widgetLogic(node, widget) {
 
             if (changedW || changedH) shouldResize = true;
         }
+
+        if (node.comfyClass === "JimengSeedream4" && widgetName === 'model_version') {
+            const optimizePromptWidget = findWidgetByName(node, 'thinking');
+            const isSupported = widget.value === "doubao-seedream-4.0";
+            if (toggleWidget(node, optimizePromptWidget, isSupported)) shouldResize = true;
+        }
     }
 
     // 处理分组生成逻辑
     if (node.comfyClass === "JimengSeedream4" || node.comfyClass === "JimengSeedream5") {
-        if (widget.name === 'enable_group_generation') {
+        if (widgetName === 'enable_group_generation') {
             const isGroupMode = widget.value === true;
             const maxImagesWidget = findWidgetByName(node, 'max_images');
 
@@ -306,7 +476,7 @@ function widgetLogic(node, widget) {
 
         // 1.5/2.0 版本特定逻辑：智能时长控制
         if (node.comfyClass === "JimengSeedance1_5" || node.comfyClass === "JimengSeedance2") {
-            if (widget.name === 'auto_duration') {
+            if (widgetName === 'auto_duration') {
                 const isAuto = widget.value === true;
                 const durationWidget = findWidgetByName(node, 'duration');
                 if (toggleWidget(node, durationWidget, !isAuto)) shouldResize = true;
@@ -315,7 +485,7 @@ function widgetLogic(node, widget) {
 
         // 1.5版本特定逻辑：样片模式联动
         if (node.comfyClass === "JimengSeedance1_5") {
-            if (widget.name === 'draft_mode') {
+            if (widgetName === 'draft_mode') {
                 const isDraftMode = widget.value === true;
                 const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
                 const reuseWidget = findWidgetByName(node, 'reuse_last_draft_task');
@@ -334,7 +504,7 @@ function widgetLogic(node, widget) {
                 }
             }
 
-            if (widget.name === 'reuse_last_draft_task') {
+            if (widgetName === 'reuse_last_draft_task') {
                 const isReuse = widget.value === true;
                 const draftTaskWidget = findWidgetByName(node, 'draft_task_id');
                 const draftModeWidget = findWidgetByName(node, 'draft_mode');
@@ -349,7 +519,7 @@ function widgetLogic(node, widget) {
         }
 
         // 通用逻辑：批量生成选项联动
-        if (widget.name === 'generation_count') {
+        if (widgetName === 'generation_count') {
             const isBatch = widget.value > 1;
             const batchPathWidget = findWidgetByName(node, 'filename_prefix');
             const saveLastFrameWidget = findWidgetByName(node, 'save_last_frame_batch');
@@ -361,7 +531,7 @@ function widgetLogic(node, widget) {
         }
 
         // 通用逻辑：随机种子控制联动
-        if (widget.name === 'enable_random_seed') {
+        if (widgetName === 'enable_random_seed') {
             const useRandom = widget.value === true;
             const showSeedControls = !useRandom;
 
@@ -377,7 +547,7 @@ function widgetLogic(node, widget) {
 
     // 处理 API Client 节点逻辑
     if (node.comfyClass === "JimengAPIClient") {
-        if (widget.name === 'key_name') {
+        if (widgetName === 'key_name') {
             const isCustom = widget.value === "Custom";
             const newKeyWidget = findWidgetByName(node, 'new_api_key');
             const newNameWidget = findWidgetByName(node, 'new_key_name');
@@ -391,13 +561,15 @@ function widgetLogic(node, widget) {
 
     // 处理视觉理解节点逻辑
     if (node.comfyClass === "JimengVisualUnderstanding") {
-        if (widget.name === 'reasoning_mode') {
+        if (widgetName === 'reasoning_mode') {
             const isThinkingEnabled = widget.value !== "disabled";
             const effortWidget = findWidgetByName(node, 'reasoning_effort');
             
             if (toggleWidget(node, effortWidget, isThinkingEnabled)) shouldResize = true;
         }
     }
+
+    refreshReferenceThinkingState(node);
 
     // 2. 若检测到布局实质变更，应用新尺寸并恢复高度差
     const paddingChanged = applyBottomPadding(node);
@@ -408,6 +580,194 @@ function widgetLogic(node, widget) {
     if (shouldResize || paddingChanged) {
         updateNodeHeight(node, extraHeight);
     }
+}
+
+function isUntranslatedDynamicLabel(value, fullName, baseName) {
+    return value == null || value === "" || value === fullName || value === baseName;
+}
+
+function applyDynamicWidgetLabels(node) {
+    if (!isZhLocale()) return false;
+    const labels = DYNAMIC_WIDGET_ZH_LABELS[node?.comfyClass];
+    if (!labels) return false;
+    const tooltips = DYNAMIC_WIDGET_ZH_TOOLTIPS[node?.comfyClass] || {};
+
+    let changed = false;
+    for (const input of node.inputs || []) {
+        const fullName = String(input?.name || "");
+        if (!fullName.startsWith("model_version.")) continue;
+        const baseName = fullName.slice("model_version.".length);
+        const label = labels[baseName];
+        if (!label) continue;
+
+        for (const property of ["label", "localized_name", "display_name"]) {
+            if (isUntranslatedDynamicLabel(input[property], fullName, baseName)) {
+                input[property] = label;
+                changed = true;
+            }
+        }
+        if (tooltips[baseName] && input.tooltip !== tooltips[baseName]) {
+            input.tooltip = tooltips[baseName];
+            changed = true;
+        }
+    }
+
+    for (const widget of node.widgets || []) {
+        const fullName = String(widget?.name || "");
+        if (!fullName.startsWith("model_version.")) continue;
+        const baseName = fullName.slice("model_version.".length);
+        const label = labels[baseName];
+        if (!label) continue;
+
+        for (const property of ["label", "localized_name", "display_name"]) {
+            if (isUntranslatedDynamicLabel(widget[property], fullName, baseName)) {
+                widget[property] = label;
+                changed = true;
+            }
+        }
+        if (tooltips[baseName] && widget.tooltip !== tooltips[baseName]) {
+            widget.tooltip = tooltips[baseName];
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
+function refreshDynamicWidgetLabels(node) {
+    if (applyDynamicWidgetLabels(node)) {
+        app.graph.setDirtyCanvas(true, true);
+    }
+}
+
+function migrateSeedream4WidgetValues(node, data) {
+    if (node.comfyClass !== 'JimengSeedream4' || !Array.isArray(data?.widgets_values)) {
+        return data;
+    }
+
+    const values = data.widgets_values;
+    let migratedValues = null;
+
+    // Workflows saved before the prompt-optimization control existed.
+    if (values.length === 10 || values.length === 11) {
+        const insertionIndex = values.length - 1;
+        migratedValues = [
+            ...values.slice(0, insertionIndex),
+            false,
+            ...values.slice(insertionIndex),
+        ];
+    }
+
+    // Workflows saved while the Boolean control was temporarily placed after
+    // size or seed. Move it directly above watermark.
+    if (
+        values.length >= 12 &&
+        typeof values[10] !== 'boolean'
+    ) {
+        const sourceIndex = typeof values[3] === 'boolean'
+            ? 3
+            : (typeof values[7] === 'boolean' ? 7 : -1);
+        if (sourceIndex >= 0) {
+            const thinking = values[sourceIndex];
+            const valuesWithoutThinking = [
+                ...values.slice(0, sourceIndex),
+                ...values.slice(sourceIndex + 1),
+            ];
+            const insertionIndex = valuesWithoutThinking.length - 1;
+            migratedValues = [
+                ...valuesWithoutThinking.slice(0, insertionIndex),
+                thinking,
+                ...valuesWithoutThinking.slice(insertionIndex),
+            ];
+        }
+    }
+
+    // Workflows briefly saved with the three-state mode control at the end.
+    const legacyMode = values[values.length - 1];
+    if (
+        typeof legacyMode === 'string' &&
+        ['disabled', 'standard', 'fast'].includes(legacyMode)
+    ) {
+        const valuesWithoutMode = values.slice(0, -1);
+        const insertionIndex = valuesWithoutMode.length - 1;
+        migratedValues = [
+            ...valuesWithoutMode.slice(0, insertionIndex),
+            legacyMode !== 'disabled',
+            ...valuesWithoutMode.slice(insertionIndex),
+        ];
+    }
+
+    return migratedValues ? { ...data, widgets_values: migratedValues } : data;
+}
+
+function migrateSeedream5WidgetValues(node, data) {
+    const values = data?.widgets_values;
+    if (
+        node.comfyClass !== 'JimengSeedream5' ||
+        !Array.isArray(values) ||
+        values[0] !== 'doubao-seedream-5.0-pro'
+    ) {
+        return data;
+    }
+
+    // Previous Pro order: seed control -> thinking -> generation count -> watermark.
+    if (typeof values[7] === 'boolean' && typeof values[8] === 'number') {
+        const migratedValues = [
+            ...values.slice(0, 7),
+            values[8],
+            values[7],
+            ...values.slice(9),
+        ];
+        return { ...data, widgets_values: migratedValues };
+    }
+
+    return data;
+}
+
+function installWidgetWatchers(node) {
+    refreshDynamicWidgetLabels(node);
+    const widgetsToWatch = node.widgets?.filter(w =>
+        TARGET_WIDGETS.includes(getWidgetBaseName(w))
+    );
+    if (!widgetsToWatch || widgetsToWatch.length === 0) return;
+
+    widgetsToWatch.forEach(w => {
+        if (w._jimengValueWatcherInstalled) return;
+        w._jimengValueWatcherInstalled = true;
+        widgetLogic(node, w);
+
+        if (getWidgetBaseName(w) === 'model_version') {
+            const originalCallback = w.callback;
+            w.callback = function (...args) {
+                const result = originalCallback?.apply(this, args);
+                widgetLogic(node, w);
+                queueMicrotask(() => installWidgetWatchers(node));
+                setTimeout(() => installWidgetWatchers(node), 0);
+                setTimeout(() => installWidgetWatchers(node), 120);
+                return result;
+            };
+            return;
+        }
+
+        let widgetValue = w.value;
+        try {
+            Object.defineProperty(w, 'value', {
+                configurable: true,
+                enumerable: true,
+                get() {
+                    return widgetValue;
+                },
+                set(newVal) {
+                    if (newVal !== widgetValue) {
+                        widgetValue = newVal;
+                        widgetLogic(node, w);
+                    }
+                }
+            });
+        } catch {
+            delete w._jimengValueWatcherInstalled;
+        }
+    });
 }
 
 app.registerExtension({
@@ -421,26 +781,18 @@ app.registerExtension({
     nodeCreated(node) {
         if (!node.comfyClass || !node.comfyClass.startsWith("Jimeng")) return;
 
-        if (VUE_NODES_ENABLED) {
-            const onConnectionsChange = node.onConnectionsChange;
-            node.onConnectionsChange = function (type, index, connected, link_info, slot) {
-                const r = onConnectionsChange ? onConnectionsChange.apply(this, arguments) : undefined;
-                refreshAutogrowInputLabels(this);
-                return r;
-            };
-
-            refreshAutogrowInputLabels(node);
-            setTimeout(() => refreshAutogrowInputLabels(node), 0);
-            setTimeout(() => refreshAutogrowInputLabels(node), 120);
-            setTimeout(() => refreshAutogrowInputLabels(node), 360);
-            return;
-        }
-
         // 劫持 configure 方法以检测是否处于加载/配置阶段
         const origConfigure = node.configure;
         node.configure = function (data) {
             this._isConfiguring = true;
-            const r = origConfigure ? origConfigure.apply(this, arguments) : undefined;
+            let migratedData = migrateSeedream4WidgetValues(this, data);
+            migratedData = migrateSeedream5WidgetValues(this, migratedData);
+            const configureArgs = [migratedData, ...Array.from(arguments).slice(1)];
+            const r = origConfigure ? origConfigure.apply(this, configureArgs) : undefined;
+            restoreLegacyWidgetValues(this, migratedData);
+            refreshDynamicWidgetLabels(this);
+            setTimeout(() => refreshDynamicWidgetLabels(this), 0);
+            setTimeout(() => refreshDynamicWidgetLabels(this), 120);
             delete this._isConfiguring;
             return r;
         };
@@ -450,6 +802,7 @@ app.registerExtension({
             const r = onConnectionsChange ? onConnectionsChange.apply(this, arguments) : undefined;
             if (!this._isConfiguring) {
                 refreshAutogrowInputLabels(this);
+                refreshReferenceThinkingState(this);
             }
             return r;
         };
@@ -459,28 +812,13 @@ app.registerExtension({
         setTimeout(() => refreshAutogrowInputLabels(node), 120);
         setTimeout(() => refreshAutogrowInputLabels(node), 360);
 
-        // 筛选需监听的组件
-        const widgetsToWatch = node.widgets?.filter(w => TARGET_WIDGETS.includes(w.name));
+        refreshDynamicWidgetLabels(node);
+        setTimeout(() => refreshDynamicWidgetLabels(node), 0);
+        setTimeout(() => refreshDynamicWidgetLabels(node), 120);
+        setTimeout(() => refreshDynamicWidgetLabels(node), 360);
 
-        if (!widgetsToWatch || widgetsToWatch.length === 0) return;
-
-        widgetsToWatch.forEach(w => {
-            // 立即执行逻辑，避免创建时闪烁
-            widgetLogic(node, w);
-
-            // 劫持 value 属性以监听变更
-            let widgetValue = w.value;
-            Object.defineProperty(w, 'value', {
-                get() {
-                    return widgetValue;
-                },
-                set(newVal) {
-                    if (newVal !== widgetValue) {
-                        widgetValue = newVal;
-                        widgetLogic(node, w);
-                    }
-                }
-            });
-        });
+        installWidgetWatchers(node);
+        setTimeout(() => installWidgetWatchers(node), 0);
+        setTimeout(() => installWidgetWatchers(node), 120);
     }
 });

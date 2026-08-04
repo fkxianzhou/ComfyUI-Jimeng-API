@@ -5,6 +5,7 @@ from .models_config import (
     VIDEO_1_UI_OPTIONS,
     VIDEO_1_5_UI_OPTIONS,
     VIDEO_2_UI_OPTIONS,
+    VIDEO_2_MODEL_RESOLUTIONS,
     QUERY_TASKS_MODEL_LIST,
     REF_IMG_2_VIDEO_MODEL_ID,
 )
@@ -127,18 +128,27 @@ def get_duration_input(default=5.0, min_val=1.2, max_val=12.0, step=0.2, is_int=
             display_mode=comfy_io.NumberDisplay.number,
         )
 
-def get_resolution_input(default="720p", support_1080p=True):
+def get_resolution_input(default="720p", support_1080p=True, support_4k=False, options=None):
     """
     获取分辨率输入参数定义。
     """
-    options = ["480p", "720p"]
-    if support_1080p:
-        options.append("1080p")
+    if options is None:
+        options = ["480p", "720p"]
+        if support_1080p:
+            options.append("1080p")
+        if support_4k:
+            options.append("4k")
+    else:
+        options = list(options)
     
     if default not in options:
         default = options[-1]
         
     return comfy_io.Combo.Input("resolution", options=options, default=default)
+
+
+def get_seedance2_resolutions(model_version: str) -> list[str]:
+    return list(VIDEO_2_MODEL_RESOLUTIONS.get(model_version, ["480p", "720p"]))
 
 def get_aspect_ratio_input(default="adaptive", include_adaptive=True):
     """
