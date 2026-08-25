@@ -1,5 +1,5 @@
 {
-  "id": "d52b37b6-cf30-4d0f-b514-848d170ad240",
+  "id": "7f1f70c4-4e61-49be-96d1-2e3f1c490007",
   "revision": 0,
   "last_node_id": 4,
   "last_link_id": 3,
@@ -7,8 +7,8 @@
     {
       "id": 1,
       "type": "JimengAPIClient",
-      "pos": [80, 220],
-      "size": [280, 120],
+      "pos": [20, 40],
+      "size": [300, 130],
       "flags": {},
       "order": 0,
       "mode": 0,
@@ -17,17 +17,15 @@
         {"name": "new_key_name", "type": "STRING", "widget": {"name": "new_key_name"}, "link": null},
         {"name": "key_name", "type": "COMBO", "widget": {"name": "key_name"}, "link": null}
       ],
-      "outputs": [
-        {"name": "client", "type": "JIMENG_CLIENT", "links": [1, 2, 3]}
-      ],
-      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.4.0", "Node name for S&R": "JimengAPIClient"},
+      "outputs": [{"name": "client", "type": "JIMENG_CLIENT", "links": [1, 2, 3]}],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengAPIClient"},
       "widgets_values": ["", "", "Custom"]
     },
     {
       "id": 2,
       "type": "JimengSeedream5",
-      "pos": [450, 20],
-      "size": [420, 360],
+      "pos": [390, 20],
+      "size": [450, 500],
       "flags": {},
       "order": 1,
       "mode": 0,
@@ -39,8 +37,8 @@
         {"name": "model_version.width", "type": "INT", "widget": {"name": "model_version.width"}, "link": null},
         {"name": "model_version.height", "type": "INT", "widget": {"name": "model_version.height"}, "link": null},
         {"name": "model_version.seed", "type": "INT", "widget": {"name": "model_version.seed"}, "link": null},
-        {"name": "model_version.thinking", "type": "BOOLEAN", "widget": {"name": "model_version.thinking"}, "link": null},
         {"name": "model_version.generation_count", "type": "INT", "widget": {"name": "model_version.generation_count"}, "link": null},
+        {"name": "model_version.thinking", "type": "BOOLEAN", "widget": {"name": "model_version.thinking"}, "link": null},
         {"name": "model_version.watermark", "type": "BOOLEAN", "widget": {"name": "model_version.watermark"}, "link": null},
         {"name": "images.image_1", "type": "IMAGE", "shape": 7, "link": null}
       ],
@@ -48,14 +46,14 @@
         {"name": "images", "type": "IMAGE", "links": null},
         {"name": "response", "type": "STRING", "links": null}
       ],
-      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.4.0", "Node name for S&R": "JimengSeedream5"},
-      "widgets_values": ["doubao-seedream-5.0-pro", "", "2K (adaptive)", 2048, 2048, 0, "randomize", true, 1, false]
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengSeedream5"},
+      "widgets_values": ["doubao-seedream-5.0-pro", "", "2K (adaptive)", 2048, 2048, 0, "randomize", 1, true, false]
     },
     {
       "id": 3,
       "type": "JimengSeedance2",
-      "pos": [920, 20],
-      "size": [430, 500],
+      "pos": [900, 20],
+      "size": [470, 590],
       "flags": {},
       "order": 2,
       "mode": 0,
@@ -86,14 +84,14 @@
         {"name": "last_frame", "type": "IMAGE", "links": null},
         {"name": "response", "type": "STRING", "links": null}
       ],
-      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.4.0", "Node name for S&R": "JimengSeedance2"},
-      "widgets_values": ["doubao-seedance-2-0", "", true, 0, "randomize", "4k", "16:9", false, 5, true, false, 1, "Jimeng/Video/Batch/Seedance", false, false]
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengSeedance2"},
+      "widgets_values": ["doubao-seedance-2-5", "", true, 0, "randomize", "720p", "adaptive", false, 30, true, false, 1, "Jimeng/Video/Batch/Seedance", false, false]
     },
     {
       "id": 4,
       "type": "JimengVisualUnderstanding",
-      "pos": [450, 440],
-      "size": [420, 430],
+      "pos": [1430, 20],
+      "size": [470, 620],
       "flags": {},
       "order": 3,
       "mode": 0,
@@ -118,8 +116,8 @@
         {"name": "content", "type": "STRING", "links": null},
         {"name": "raw_json", "type": "STRING", "links": null}
       ],
-      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.4.0", "Node name for S&R": "JimengVisualUnderstanding"},
-      "widgets_values": ["doubao-seed-2-1-pro", "", "请描述这张图片或视频的内容。", "high", 1.0, "auto", "medium", 1, false, 604800, 0, "randomize"]
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengVisualUnderstanding"},
+      "widgets_values": ["doubao-seed-2-1-pro", "你叫豆包，是由字节跳动开发的AI。", "请描述这张图片或视频的内容。", "high", 1.0, "auto", "medium", 1, false, 604800, 0, "randomize"]
     }
   ],
   "links": [
@@ -127,8 +125,10 @@
     [2, 1, 0, 3, 0, "JIMENG_CLIENT"],
     [3, 1, 0, 4, 0, "JIMENG_CLIENT"]
   ],
-  "groups": [],
+  "groups": [
+    {"id": 1, "title": "2.5 模型更新", "bounding": [360, -40, 1580, 730], "color": "#3f789e", "font_size": 24, "flags": {}}
+  ],
   "config": {},
-  "extra": {"workflowRendererVersion": "LG"},
+  "extra": {"ds": {"scale": 0.72, "offset": [80, 80]}},
   "version": 0.4
 }

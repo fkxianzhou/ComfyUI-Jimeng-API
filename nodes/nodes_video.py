@@ -70,7 +70,12 @@ from .executor import (
     _finish_node_progress,
     HISTORY_PAGE_SIZE,
 )
-from .models_config import VIDEO_MODEL_MAP, VIDEO_2_MODEL_RESOLUTIONS
+from .models_config import (
+    VIDEO_MODEL_MAP,
+    VIDEO_2_MODEL_RESOLUTIONS,
+    VIDEO_2_MODEL_MAX_DURATIONS,
+    VIDEO_2_MODEL_REFERENCE_LIMITS,
+)
 
 logging.getLogger("volcenginesdkarkruntime").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -152,6 +157,58 @@ def validate_seedance2_resolution(model_version, resolution):
     return resolution
 
 
+def validate_seedance2_duration(model_version, duration, auto_duration=False):
+    max_duration = VIDEO_2_MODEL_MAX_DURATIONS.get(model_version)
+    if max_duration is None:
+        raise JimengException(
+            get_text("err_model_not_supported").format(model=model_version)
+        )
+    if auto_duration:
+        return -1
+    try:
+        duration_value = float(duration)
+    except (TypeError, ValueError):
+        duration_value = -1.0
+    if (
+        not duration_value.is_integer()
+        or duration_value < 4
+        or duration_value > max_duration
+    ):
+        raise JimengException(
+            get_text("err_seedance2_duration_unsupported").format(
+                model=model_version,
+                min=4,
+                max=max_duration,
+                duration=duration,
+            )
+        )
+    return int(duration_value)
+
+
+def validate_seedance2_reference_counts(model_version, images, videos, audios):
+    limits = VIDEO_2_MODEL_REFERENCE_LIMITS.get(model_version)
+    if limits is None:
+        raise JimengException(
+            get_text("err_model_not_supported").format(model=model_version)
+        )
+    counts = {
+        "images": len(images),
+        "videos": len(videos),
+        "audios": len(audios),
+    }
+    for kind, count in counts.items():
+        if count > limits[kind]:
+            raise JimengException(
+                get_text("popup_ref_count_exceeded").format(
+                    model=model_version,
+                    max=limits[kind],
+                    kind=get_text(f"ref_kind_{kind}"),
+                    count=count,
+                )
+            )
+    return counts
+
+
 from .constants import (
     VIDEO_MAX_SEED,
     VIDEO_DEFAULT_TIMEOUT,
@@ -174,6 +231,7 @@ from .constants import (
     REF_AUDIO_MAX_TOTAL_DURATION,
     REF_AUDIO_MAX_SIZE_MB,
     REF_AUDIO_MAX_TOTAL_REQUEST_MB,
+    REF_MEDIA_MAX_DURATION_SEEDANCE_2_5,
 )
 
 class JimengVideoBase:
@@ -468,7 +526,7 @@ class JimengVideoBase:
         normalized = str(codec or "").lower().replace(".", "").replace("-", "")
         return not normalized or any(token in normalized for token in allowed_tokens)
 
-    def _validate_single_reference_video(self, video):
+    def _validate_single_reference_video(self, video, max_duration=REF_VIDEO_MAX_DURATION):
         try:
             container_format = str(video.get_container_format() or "").lower()
             width, height = video.get_dimensions()
@@ -531,11 +589,11 @@ class JimengVideoBase:
                 )
             )
 
-        if duration < REF_VIDEO_MIN_DURATION or duration > REF_VIDEO_MAX_DURATION:
+        if duration < REF_VIDEO_MIN_DURATION or duration > max_duration:
             raise JimengException(
                 get_text("popup_ref_video_duration_out_of_range").format(
                     min=REF_VIDEO_MIN_DURATION,
-                    max=REF_VIDEO_MAX_DURATION,
+                    max=max_duration,
                     duration=f"{duration:.3f}",
                 )
             )
@@ -550,19 +608,27 @@ class JimengVideoBase:
 
         return duration
 
-    def _validate_reference_videos_constraints(self, ref_videos, ref_video_urls=None):
+    def _validate_reference_videos_constraints(
+        self,
+        ref_videos,
+        ref_video_urls=None,
+        max_duration=REF_VIDEO_MAX_DURATION,
+        max_total_duration=REF_VIDEO_MAX_TOTAL_DURATION,
+    ):
         if ref_video_urls is None:
             ref_video_urls = []
         total_duration = 0.0
         for v in ref_videos:
             if v is None:
                 continue
-            total_duration += self._validate_single_reference_video(v)
+            total_duration += self._validate_single_reference_video(
+                v, max_duration=max_duration
+            )
 
-        if total_duration > REF_VIDEO_MAX_TOTAL_DURATION:
+        if total_duration > max_total_duration:
             raise JimengException(
                 get_text("popup_ref_video_total_duration_exceeded").format(
-                    max=REF_VIDEO_MAX_TOTAL_DURATION, duration=f"{total_duration:.3f}"
+                    max=max_total_duration, duration=f"{total_duration:.3f}"
                 )
             )
 
@@ -581,7 +647,7 @@ class JimengVideoBase:
             }
         )
 
-    def _audio_to_data_uri(self, audio):
+    def _audio_to_data_uri(self, audio, max_duration=REF_AUDIO_MAX_DURATION):
         if audio is None:
             return None
 
@@ -603,11 +669,11 @@ class JimengVideoBase:
         audio_tensor = torch.clamp(audio_tensor, -1.0, 1.0)
         sample_count = int(audio_tensor.shape[1])
         duration = float(sample_count) / float(sample_rate)
-        if duration < REF_AUDIO_MIN_DURATION or duration > REF_AUDIO_MAX_DURATION:
+        if duration < REF_AUDIO_MIN_DURATION or duration > max_duration:
             raise JimengException(
                 get_text("popup_ref_audio_duration_out_of_range").format(
                     min=REF_AUDIO_MIN_DURATION,
-                    max=REF_AUDIO_MAX_DURATION,
+                    max=max_duration,
                     duration=f"{duration:.3f}",
                 )
             )
@@ -635,8 +701,10 @@ class JimengVideoBase:
         data_uri = f"data:audio/wav;base64,{base64_audio}"
         return data_uri, duration, len(data_uri.encode("utf-8"))
 
-    def _append_audio_content(self, content_list, audio, role):
-        audio_data = self._audio_to_data_uri(audio)
+    def _append_audio_content(
+        self, content_list, audio, role, max_duration=REF_AUDIO_MAX_DURATION
+    ):
+        audio_data = self._audio_to_data_uri(audio, max_duration=max_duration)
         if audio_data is None:
             return None
         audio_data_uri, duration, request_bytes = audio_data
@@ -1301,12 +1369,13 @@ class JimengSeedance1_5(JimengVideoBase, comfy_io.ComfyNode):
 
 class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
     """
-    Jimeng Seedance 2.0 视频生成节点。
+    Jimeng Seedance 2.0 / 2.5 视频生成节点。
     支持文本、图片、视频、音频多模态参考，以及视频编辑/延长等工作流。
     """
 
     @staticmethod
     def _model_inputs(model_version):
+        max_duration = VIDEO_2_MODEL_MAX_DURATIONS.get(model_version, 15)
         return [
             comfy_io.String.Input("prompt", multiline=True, default=""),
             *get_common_video_seed_inputs(),
@@ -1315,7 +1384,7 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
             ),
             get_aspect_ratio_input(default="adaptive", include_adaptive=True),
             comfy_io.Boolean.Input("auto_duration", default=False),
-            get_duration_input(default=5, min_val=4, max_val=15, is_int=True),
+            get_duration_input(default=5, min_val=4, max_val=max_duration, is_int=True),
             comfy_io.Boolean.Input("generate_audio", default=True),
             comfy_io.Boolean.Input("enable_web_search", default=False),
             *get_common_video_runtime_inputs(include_offline=False),
@@ -1325,11 +1394,11 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
     def define_schema(cls) -> comfy_io.Schema:
         return comfy_io.Schema(
             node_id="JimengSeedance2",
-            display_name="Jimeng Seedance 2.0",
+            display_name="Jimeng Seedance 2 / 2.5",
             category=GLOBAL_CATEGORY,
             description=(
-                "Generate or edit video with Seedance 2.0, Fast, or Mini. "
-                "The standard model supports up to 4K output."
+                "Generate or edit video with Seedance 2.0, Fast, Mini, or 2.5. "
+                "Seedance 2.5 supports up to 30-second output and more references."
             ),
             is_output_node=True,
             is_experimental=True,
@@ -1349,19 +1418,19 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
                 _create_named_autogrow_input(
                     "ref_images",
                     comfy_io.Image.Input("ref_image", optional=True),
-                    [f"ref_image_{idx}" for idx in range(1, 10)],
+                    [f"ref_image_{idx}" for idx in range(1, 31)],
                     1,
                 ),
                 _create_named_autogrow_input(
                     "ref_videos",
                     comfy_io.Video.Input("ref_video", optional=True),
-                    [f"ref_video_{idx}" for idx in range(1, 4)],
+                    [f"ref_video_{idx}" for idx in range(1, 11)],
                     1,
                 ),
                 _create_named_autogrow_input(
                     "ref_audios",
                     comfy_io.Audio.Input("ref_audio", optional=True),
-                    [f"ref_audio_{idx}" for idx in range(1, 4)],
+                    [f"ref_audio_{idx}" for idx in range(1, 11)],
                     1,
                 ),
             ],
@@ -1427,6 +1496,7 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
             non_blocking = model_config.get("non_blocking", non_blocking)
 
         validate_seedance2_resolution(model_version, resolution)
+        duration = validate_seedance2_duration(model_version, duration, auto_duration)
 
         helper = JimengVideoBase()
         helper.NON_BLOCKING_TASK_CACHE = cls.NON_BLOCKING_TASK_CACHE
@@ -1436,6 +1506,19 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         ref_images = _collect_dynamic_inputs(ref_images, kwargs, "ref_image_")
         ref_videos = _collect_dynamic_inputs(ref_videos, kwargs, "ref_video_")
         ref_audios = _collect_dynamic_inputs(ref_audios, kwargs, "ref_audio_")
+        validate_seedance2_reference_counts(
+            model_version, ref_images, ref_videos, ref_audios
+        )
+        is_seedance_2_5 = model_version == "doubao-seedance-2-5"
+        if is_seedance_2_5 and ref_videos and (
+            aspect_ratio != "adaptive" or not auto_duration
+        ):
+            raise JimengException(get_text("err_seedance25_editing_params"))
+        reference_media_max_duration = (
+            REF_MEDIA_MAX_DURATION_SEEDANCE_2_5
+            if is_seedance_2_5
+            else REF_VIDEO_MAX_DURATION
+        )
 
         for img in [first_frame_image, last_frame_image] + ref_images:
             helper._validate_reference_image_constraints(img)
@@ -1455,7 +1538,11 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         if (first_frame_image is not None or last_frame_image is not None) and has_any_reference_inputs:
             raise JimengException(get_text("popup_first_last_conflict_with_refs"))
 
-        helper._validate_reference_videos_constraints(ref_videos)
+        helper._validate_reference_videos_constraints(
+            ref_videos,
+            max_duration=reference_media_max_duration,
+            max_total_duration=reference_media_max_duration,
+        )
 
         for img in ref_images:
             total_image_request_bytes += helper._append_image_content(
@@ -1502,17 +1589,27 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         total_audio_duration = 0.0
         total_audio_request_bytes = 0
         for audio in ref_audios:
-            appended = helper._append_audio_content(content, audio, "reference_audio")
+            appended = helper._append_audio_content(
+                content,
+                audio,
+                "reference_audio",
+                max_duration=reference_media_max_duration,
+            )
             if appended is None:
                 continue
             audio_duration, request_bytes = appended
             total_audio_duration += audio_duration
             total_audio_request_bytes += request_bytes
 
-        if total_audio_duration > REF_AUDIO_MAX_TOTAL_DURATION:
+        max_total_audio_duration = (
+            REF_MEDIA_MAX_DURATION_SEEDANCE_2_5
+            if is_seedance_2_5
+            else REF_AUDIO_MAX_TOTAL_DURATION
+        )
+        if total_audio_duration > max_total_audio_duration:
             raise JimengException(
                 get_text("popup_ref_audio_total_duration_exceeded").format(
-                    max=REF_AUDIO_MAX_TOTAL_DURATION, duration=f"{total_audio_duration:.3f}"
+                    max=max_total_audio_duration, duration=f"{total_audio_duration:.3f}"
                 )
             )
 
@@ -1538,7 +1635,11 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         if not prompt and not content:
             raise JimengException(get_text("popup_video_prompt_or_ref_required"))
 
-        if has_audio_reference and not (has_image_reference or has_video_reference):
+        if (
+            has_audio_reference
+            and not is_seedance_2_5
+            and not (has_image_reference or has_video_reference)
+        ):
             raise JimengException(
                 get_text("popup_audio_requires_visual_ref")
             )
@@ -1546,7 +1647,7 @@ class JimengSeedance2(JimengVideoBase, comfy_io.ComfyNode):
         if not has_image_reference and not has_video_reference and aspect_ratio == "adaptive":
             aspect_ratio = "16:9"
 
-        final_duration = -1 if auto_duration else duration
+        final_duration = duration
         extra_api_params = {
             "generate_audio": generate_audio,
         }

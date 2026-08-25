@@ -129,7 +129,7 @@ async def _get_api_estimated_time_async(
         if m in VIDEO_MODEL_MAP:
             v2_model_ids.add(VIDEO_MODEL_MAP[m])
 
-    is_seedance2 = model_name in v2_model_ids or "doubao-seedance-2-0" in model_name_lc
+    is_seedance2 = model_name in v2_model_ids or "doubao-seedance-2-" in model_name_lc
     request_has_ref_video = _contains_reference_video(content) if is_seedance2 else False
     seedance2_expected_with_video_per_sec = None
     seedance2_expected_without_video_per_sec = None
@@ -482,7 +482,7 @@ class JimengGenerationExecutor:
         if extra_api_params:
             request_kwargs.update(extra_api_params)
 
-        if "seedance-2-0" in str(model_name):
+        if "seedance-2-" in str(model_name).lower():
             request_kwargs.pop("service_tier", None)
             request_kwargs.pop("execution_expires_after", None)
 
@@ -503,7 +503,7 @@ class JimengGenerationExecutor:
             task_kwargs = request_kwargs.copy()
             if is_multi_content:
                 task_kwargs["content"] = content[i % len(content)]
-            if "seedance-2-0" in str(model_name).lower():
+            if "seedance-2-" in str(model_name).lower():
                 validate_seedance_request_size(task_kwargs)
             submitted_task_kwargs.append(task_kwargs)
             

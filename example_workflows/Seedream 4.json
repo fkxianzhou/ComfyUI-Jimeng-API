@@ -1,1 +1,99 @@
-{"id":"f477984c-0d7e-476e-8f0b-5a312c5d9de4","revision":0,"last_node_id":85,"last_link_id":330,"nodes":[{"id":45,"type":"SaveImage","pos":[1370,470],"size":[270,270],"flags":{},"order":6,"mode":0,"inputs":[{"localized_name":"图片","name":"images","type":"IMAGE","link":327},{"localized_name":"文件名前缀","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null}],"outputs":[],"properties":{"cnr_id":"comfy-core","ver":"0.3.65","Node name for S&R":"SaveImage"},"widgets_values":["Jimeng/Image/Seedream4"]},{"id":71,"type":"Fast Groups Bypasser (rgthree)","pos":[350,650],"size":[270,130],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"label":"可选连接","name":"OPT_CONNECTION","type":"*","links":null}],"properties":{"matchColors":"","matchTitle":"","showNav":true,"showAllGraphs":true,"sort":"position","customSortAlphabet":"","toggleRestriction":"default"}},{"id":75,"type":"Note","pos":[650,820],"size":[280,150],"flags":{},"order":1,"mode":4,"inputs":[],"outputs":[],"title":"注释","properties":{},"widgets_values":["Seedream 4 支持最多14张参考图片作为输入。\n节点默认提供1个参考图像接口，连接后自动增加新的输入接口（最多14个）。\n可复制多个节点实现批量处理任务（仅供测试）。"],"color":"#432","bgcolor":"#653"},{"id":79,"type":"ShowText|pysssss","pos":[1370,800],"size":[270,290],"flags":{},"order":2,"mode":0,"inputs":[{"label":"文本","localized_name":"文本","name":"text","type":"STRING","link":328}],"outputs":[{"label":"字符串","localized_name":"字符串","name":"STRING","shape":6,"type":"STRING","links":null}],"title":"展示文本","properties":{"cnr_id":"comfyui-custom-scripts","ver":"609f3afaa74b2f88ef9ce8d939626065e3247469","Node name for S&R":"ShowText|pysssss"},"widgets_values":[]},{"id":85,"type":"JimengSeedream4","pos":[960,470],"size":[400,304],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","link":329},{"label":"图像 1","localized_name":"图像 1","name":"images.image_1","shape":7,"type":"IMAGE","link":330},{"label":"图像 2","localized_name":"图像 2","name":"images.image_2","shape":7,"type":"IMAGE","link":null},{"localized_name":"模型版本","name":"model_version","type":"COMBO","widget":{"name":"model_version"},"link":null},{"localized_name":"提示词","name":"prompt","type":"STRING","widget":{"name":"prompt"},"link":null},{"localized_name":"尺寸","name":"size","type":"COMBO","widget":{"name":"size"},"link":null},{"localized_name":"宽度","name":"width","type":"INT","widget":{"name":"width"},"link":null},{"localized_name":"高度","name":"height","type":"INT","widget":{"name":"height"},"link":null},{"localized_name":"种子","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"启用组图生成","name":"enable_group_generation","type":"BOOLEAN","widget":{"name":"enable_group_generation"},"link":null},{"localized_name":"最大图像数","name":"max_images","type":"INT","widget":{"name":"max_images"},"link":null},{"localized_name":"生成数量","name":"generation_count","type":"INT","widget":{"name":"generation_count"},"link":null},{"localized_name":"水印","name":"watermark","type":"BOOLEAN","widget":{"name":"watermark"},"link":null}],"outputs":[{"localized_name":"图像","name":"images","type":"IMAGE","links":[327]},{"localized_name":"响应","name":"response","type":"STRING","links":[328]}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"8cd6b9f716d172b53413943739c2d0f1a3e99fdd","Node name for S&R":"JimengSeedream4"},"widgets_values":["doubao-seedream-4.5","","2K (adaptive)",2048,2048,0,"randomize",false,1,1,false]},{"id":72,"type":"JimengAPIClient","pos":[350,470],"size":[270,120],"flags":{},"order":4,"mode":0,"inputs":[{"localized_name":"API Key","name":"new_api_key","type":"STRING","widget":{"name":"new_api_key"},"link":null},{"localized_name":"保存名称 (可选)","name":"new_key_name","type":"STRING","widget":{"name":"new_key_name"},"link":null},{"localized_name":"密钥","name":"key_name","type":"COMBO","widget":{"name":"key_name"},"link":null}],"outputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","links":[329]}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"ed6cf979bb10d44536faa132990eddb6f8419f1c","Node name for S&R":"JimengAPIClient"},"widgets_values":["","","Custom"]},{"id":74,"type":"LoadImage","pos":[650,470],"size":[280,310],"flags":{},"order":3,"mode":4,"inputs":[{"localized_name":"图像","name":"image","type":"COMBO","widget":{"name":"image"},"link":null},{"localized_name":"选择文件上传","name":"upload","type":"IMAGEUPLOAD","widget":{"name":"upload"},"link":null}],"outputs":[{"localized_name":"图像","name":"IMAGE","type":"IMAGE","links":[330]},{"localized_name":"遮罩","name":"MASK","type":"MASK","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.3.52","Node name for S&R":"LoadImage"},"widgets_values":["comfyui_logo.png","image"]}],"links":[[327,85,0,45,0,"IMAGE"],[328,85,1,79,0,"STRING"],[329,72,0,85,0,"JIMENG_CLIENT"],[330,74,0,85,1,"IMAGE"]],"groups":[{"id":2,"title":"参考图像","bounding":[640,390,300,590],"color":"#3f789e","font_size":24,"flags":{}},{"id":4,"title":"单任务","bounding":[950,390,700,710],"color":"#3f789e","font_size":24,"flags":{}}],"config":{},"extra":{"ds":{"scale":1.2703756849315073,"offset":[-239.04065072091237,-285.77960944815186]},"frontendVersion":"1.18.9","workflowRendererVersion":"LG","VHS_latentpreview":false,"VHS_latentpreviewrate":0,"VHS_MetadataImage":true,"VHS_KeepIntermediate":true},"version":0.4}
+{
+  "id": "7f1f70c4-4e61-49be-96d1-2e3f1c490002",
+  "revision": 0,
+  "last_node_id": 4,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "JimengAPIClient",
+      "pos": [20, 100],
+      "size": [300, 130],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {"name": "new_api_key", "type": "STRING", "widget": {"name": "new_api_key"}, "link": null},
+        {"name": "new_key_name", "type": "STRING", "widget": {"name": "new_key_name"}, "link": null},
+        {"name": "key_name", "type": "COMBO", "widget": {"name": "key_name"}, "link": null}
+      ],
+      "outputs": [{"name": "client", "type": "JIMENG_CLIENT", "links": [1]}],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengAPIClient"},
+      "widgets_values": ["", "", "Custom"]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [20, 300],
+      "size": [300, 320],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "COMBO", "widget": {"name": "image"}, "link": null},
+        {"name": "upload", "type": "IMAGEUPLOAD", "widget": {"name": "upload"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [2]},
+        {"name": "MASK", "type": "MASK", "links": null}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.33.2", "Node name for S&R": "LoadImage"},
+      "widgets_values": ["comfyui_logo.png", "image"]
+    },
+    {
+      "id": 3,
+      "type": "JimengSeedream4",
+      "pos": [390, 100],
+      "size": [430, 560],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "client", "type": "JIMENG_CLIENT", "link": 1},
+        {"name": "model_version", "type": "COMBO", "widget": {"name": "model_version"}, "link": null},
+        {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}, "link": null},
+        {"name": "size", "type": "COMBO", "widget": {"name": "size"}, "link": null},
+        {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": null},
+        {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": null},
+        {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": null},
+        {"name": "enable_group_generation", "type": "BOOLEAN", "widget": {"name": "enable_group_generation"}, "link": null},
+        {"name": "max_images", "type": "INT", "widget": {"name": "max_images"}, "link": null},
+        {"name": "generation_count", "type": "INT", "widget": {"name": "generation_count"}, "link": null},
+        {"name": "thinking", "type": "BOOLEAN", "widget": {"name": "thinking"}, "link": null},
+        {"name": "watermark", "type": "BOOLEAN", "widget": {"name": "watermark"}, "link": null},
+        {"name": "images.image_1", "type": "IMAGE", "shape": 7, "link": 2}
+      ],
+      "outputs": [
+        {"name": "images", "type": "IMAGE", "links": [3]},
+        {"name": "response", "type": "STRING", "links": null}
+      ],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengSeedream4"},
+      "widgets_values": ["doubao-seedream-4.0", "", "2K (adaptive)", 2048, 2048, 0, "randomize", false, 1, 1, true, false]
+    },
+    {
+      "id": 4,
+      "type": "SaveImage",
+      "pos": [890, 100],
+      "size": [300, 270],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 3},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null}
+      ],
+      "outputs": [],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.33.2", "Node name for S&R": "SaveImage"},
+      "widgets_values": ["Jimeng/Image/Seedream4"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "JIMENG_CLIENT"],
+    [2, 2, 0, 3, 12, "IMAGE"],
+    [3, 3, 0, 4, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {"ds": {"scale": 1, "offset": [40, 40]}},
+  "version": 0.4
+}

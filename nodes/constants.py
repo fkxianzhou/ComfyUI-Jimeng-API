@@ -34,6 +34,7 @@ REF_IMAGE_MAX_SIZE_MB = 30.0
 REF_IMAGE_MAX_TOTAL_REQUEST_MB = 64.0
 REF_MEDIA_MIN_DURATION = 1.8
 REF_MEDIA_MAX_DURATION = 15.2
+REF_MEDIA_MAX_DURATION_SEEDANCE_2_5 = 30.2
 REF_VIDEO_MIN_DURATION = REF_MEDIA_MIN_DURATION
 REF_VIDEO_MAX_DURATION = REF_MEDIA_MAX_DURATION
 REF_VIDEO_MAX_TOTAL_DURATION = REF_MEDIA_MAX_DURATION
@@ -139,6 +140,10 @@ LOG_TRANSLATIONS = {
         "popup_video_prompt_or_ref_required": "必须提供提示词或至少一种参考素材。",
         "popup_audio_requires_visual_ref": "使用参考音频时，必须同时提供至少一张参考图片或一个参考视频。",
         "popup_first_last_conflict_with_refs": "首尾帧模式与参考输入模式不能同时使用，请二选一。",
+        "popup_ref_count_exceeded": "模型 {model} 最多支持 {max} 个{kind}。当前: {count}",
+        "ref_kind_images": "参考图片",
+        "ref_kind_videos": "参考视频",
+        "ref_kind_audios": "参考音频",
         "popup_ref_image_hw_out_of_range": "参考图片宽高需在 {min}px 到 {max}px 之间。当前: {width}x{height}",
         "popup_ref_image_ratio_out_of_range": "参考图片宽高比需在 {min} 到 {max} 之间。当前: {ratio}",
         "popup_ref_image_size_exceeded": "单张参考图片 Base64 大小不能超过 {max_mb}MB。当前: {size_mb}MB",
@@ -168,6 +173,8 @@ LOG_TRANSLATIONS = {
         "err_download_img": "下载生成的图像失败。",
         "err_model_not_supported": "当前节点不支持模型 {model}。",
         "err_seedance2_resolution_unsupported": "模型 {model} 不支持 {resolution}；可选分辨率为 {supported}。",
+        "err_seedance2_duration_unsupported": "模型 {model} 的时长需在 {min} 到 {max} 秒之间。当前: {duration}",
+        "err_seedance25_editing_params": "Seedance 2.5 使用参考视频进行编辑或延长时，宽高比必须为 adaptive，并启用智能时长。",
         "err_request_body_too_large": "最终请求体超过 64 MiB 限制（上限 {max_bytes} 字节，当前 {current_bytes} 字节）。请减少参考素材。",
         "err_seedream5_pro_thinking_required": "Seedream 5 Pro 使用参考图时必须开启思考模式。",
         "err_gen_model": "模型 {model} 生成失败: {e}",
@@ -234,6 +241,7 @@ LOG_TRANSLATIONS = {
             "InvalidImageDetail": "image_url 中的 detail 参数值无效，只接受 'auto', 'high', 'low'。",
             "MissingParameter": "请求缺少必要参数，请查阅 API 文档。",
             "InvalidParameter": "请求包含非法参数，请查阅 API 文档。",
+            "InvalidParameter.TaskTypeConstraint": "任务类型与当前参数不兼容。视频编辑或延长时，请使用 adaptive 宽高比和智能时长。",
             "RequestBodyTooLarge": "请求体超过服务限制，请减少参考素材后重试。",
             "ModelParameterNotSupported": "当前模型不支持请求中的一个或多个参数，请调整模型相关设置后重试。",
             "MediaInvalid": "参考素材不符合格式、编码、尺寸、时长或帧率限制，请检查素材。",
@@ -310,6 +318,10 @@ LOG_TRANSLATIONS = {
         "popup_video_prompt_or_ref_required": "Parameter Error: A prompt or at least one reference input is required.",
         "popup_audio_requires_visual_ref": "Parameter Error: Audio reference requires at least one reference image or reference video.",
         "popup_first_last_conflict_with_refs": "Parameter Error: First/last frame mode cannot be used together with reference inputs. Please choose one.",
+        "popup_ref_count_exceeded": "Parameter Error: Model {model} supports at most {max} {kind} inputs. Current: {count}",
+        "ref_kind_images": "reference image",
+        "ref_kind_videos": "reference video",
+        "ref_kind_audios": "reference audio",
         "popup_ref_image_hw_out_of_range": "Parameter Error: Reference image width/height must be between {min}px and {max}px. Current: {width}x{height}",
         "popup_ref_image_ratio_out_of_range": "Parameter Error: Reference image ratio must be between {min} and {max}. Current: {ratio}",
         "popup_ref_image_size_exceeded": "Parameter Error: Single reference image Base64 size cannot exceed {max_mb}MB. Current: {size_mb}MB",
@@ -337,6 +349,8 @@ LOG_TRANSLATIONS = {
         "err_download_img": "Error: Failed to download the generated image.",
         "err_model_not_supported": "This node does not support model {model}.",
         "err_seedance2_resolution_unsupported": "Model {model} does not support {resolution}. Supported resolutions: {supported}.",
+        "err_seedance2_duration_unsupported": "Model {model} requires a duration between {min} and {max} seconds. Current: {duration}",
+        "err_seedance25_editing_params": "Seedance 2.5 video editing or extension requires the adaptive aspect ratio and auto duration.",
         "err_request_body_too_large": "The final request body exceeds the 64 MiB limit (maximum {max_bytes} bytes; current {current_bytes} bytes). Reduce reference media.",
         "err_seedream5_pro_thinking_required": "Thinking must be enabled when Seedream 5 Pro uses reference images.",
         "err_gen_model": "Failed to generate image with model {model}: {e}",
@@ -399,6 +413,7 @@ LOG_TRANSLATIONS = {
             "InvalidImageDetail": "Invalid Image Detail parameter (400).",
             "MissingParameter": "Missing Parameter (400).",
             "InvalidParameter": "Invalid Parameter (400).",
+            "InvalidParameter.TaskTypeConstraint": "The task type is incompatible with the current parameters. Video editing or extension requires the adaptive aspect ratio and auto duration.",
             "RequestBodyTooLarge": "Request body exceeds the service limit. Reduce reference media and try again.",
             "ModelParameterNotSupported": "One or more request parameters are not supported by the selected model.",
             "MediaInvalid": "Reference media violates a format, codec, size, duration, or frame-rate limit.",
@@ -434,6 +449,7 @@ ERROR_TEXT_MATCH_RULES = {
     "exceeded the quota": "QuotaExceeded",
     "limit of the associated endpoint": "RateLimitExceeded",
     "Request failed because it is missing": "MissingParameter",
+    "the task is determined as video editing": "InvalidParameter.TaskTypeConstraint",
     "parameters specified in the request are not valid": "InvalidParameter",
     "parameter resolution specified in the request is not valid": "InvalidResolutionParameter",
     "not permitted to access": "AccessDenied",

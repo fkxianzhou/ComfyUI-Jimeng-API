@@ -42,6 +42,10 @@ class ModelConfigurationTests(unittest.TestCase):
             "doubao-seedance-2-0-mini-260615",
         )
         self.assertEqual(
+            models_config.VIDEO_MODEL_MAP["doubao-seedance-2-5"],
+            "doubao-seedance-2-5-260628",
+        )
+        self.assertEqual(
             next(iter(models_config.VISUAL_MODEL_MAP.items())),
             ("doubao-seed-2-1-pro", "doubao-seed-2-1-pro-260628"),
         )
@@ -64,6 +68,42 @@ class ModelConfigurationTests(unittest.TestCase):
         for model in ("doubao-seedance-2-0-fast", "doubao-seedance-2-0-mini"):
             with self.assertRaises(Exception):
                 nodes_video.validate_seedance2_resolution(model, "4k")
+        self.assertEqual(
+            models_config.VIDEO_2_MODEL_RESOLUTIONS["doubao-seedance-2-5"],
+            ["480p", "720p"],
+        )
+        with self.assertRaises(Exception):
+            nodes_video.validate_seedance2_resolution("doubao-seedance-2-5", "1080p")
+
+    def test_seedance25_duration_and_reference_limits(self):
+        self.assertEqual(
+            nodes_video.validate_seedance2_duration("doubao-seedance-2-5", 30),
+            30,
+        )
+        self.assertEqual(
+            nodes_video.validate_seedance2_duration(
+                "doubao-seedance-2-5", 30, auto_duration=True
+            ),
+            -1,
+        )
+        with self.assertRaises(Exception):
+            nodes_video.validate_seedance2_duration("doubao-seedance-2-5", 31)
+        with self.assertRaises(Exception):
+            nodes_video.validate_seedance2_duration("doubao-seedance-2-0", 16)
+        with self.assertRaises(Exception):
+            nodes_video.validate_seedance2_duration("doubao-seedance-2-5", 4.5)
+
+        accepted = nodes_video.validate_seedance2_reference_counts(
+            "doubao-seedance-2-5",
+            [object()] * 30,
+            [object()] * 10,
+            [object()] * 10,
+        )
+        self.assertEqual(accepted, {"images": 30, "videos": 10, "audios": 10})
+        with self.assertRaises(Exception):
+            nodes_video.validate_seedance2_reference_counts(
+                "doubao-seedance-2-0", [object()] * 10, [], []
+            )
 
     def test_dynamic_combo_schema_and_nested_order(self):
         image_combo = nodes_image.JimengSeedream5.define_schema().inputs[1]
@@ -72,6 +112,22 @@ class ModelConfigurationTests(unittest.TestCase):
         self.assertEqual(video_combo.io_type, "COMFY_DYNAMICCOMBO_V3")
         self.assertEqual(image_combo.options[0].key, "doubao-seedream-5.0-pro")
         self.assertEqual(video_combo.options[0].key, "doubao-seedance-2-0")
+
+        seedance25 = next(
+            option
+            for option in video_combo.options
+            if option.key == "doubao-seedance-2-5"
+        )
+        duration_input = next(
+            item for item in seedance25.inputs if item.id == "duration"
+        )
+        self.assertEqual(duration_input.max, 30)
+
+        video_schema = nodes_video.JimengSeedance2.define_schema()
+        dynamic_inputs = {item.id: item for item in video_schema.inputs[2:5]}
+        self.assertEqual(len(dynamic_inputs["ref_images"].template.names), 30)
+        self.assertEqual(len(dynamic_inputs["ref_videos"].template.names), 10)
+        self.assertEqual(len(dynamic_inputs["ref_audios"].template.names), 10)
 
         lite = next(
             option
@@ -188,8 +244,28 @@ class RequestAndEstimationTests(unittest.TestCase):
                 ark, "doubao-seedance-2-0-260615", 5, "4k", content=[]
             )
         )
+        seedance25 = asyncio.run(
+            executor._get_api_estimated_time_async(
+                ark,
+                "doubao-seedance-2-5-260628",
+                30,
+                "720p",
+                content=[{"type": "video_url", "video_url": {"url": "x.mp4"}}],
+            )
+        )
         self.assertEqual(with_reference[0], 5 * 90 + executor.DEFAULT_FALLBACK_BASE)
         self.assertEqual(without_reference[0], 5 * 45 + executor.DEFAULT_FALLBACK_BASE)
+        self.assertEqual(seedance25[0], 30 * 40 + executor.DEFAULT_FALLBACK_BASE)
+
+    def test_seedance25_task_type_error_is_localized(self):
+        raw = (
+            "The parameter(s) ratio and duration specified in the request are not valid. "
+            "The task is determined as video editing. Issues: ratio must be adaptive; "
+            "duration must be -1."
+        )
+        translated = nodes_video.format_api_error(Exception(raw))
+        self.assertIn("adaptive", translated)
+        self.assertIn("InvalidParameter.TaskTypeConstraint", translated)
 
     def test_mini_non_blocking_submission_returns_task_json_state(self):
         submitted = []
@@ -240,6 +316,63 @@ class RequestAndEstimationTests(unittest.TestCase):
         self.assertEqual(result["task_ids"], ["task-mini-1"])
         self.assertEqual(submitted[0]["model"], "doubao-seedance-2-0-mini-260615")
         self.assertNotIn("service_tier", submitted[0])
+
+    def test_seedance25_submission_uses_seedance2_request_policy(self):
+        submitted = []
+        validated = []
+
+        class Tasks:
+            @staticmethod
+            def create(**kwargs):
+                submitted.append(kwargs)
+                return SimpleNamespace(id="task-seedance25-1")
+
+            @staticmethod
+            def list(**_kwargs):
+                return SimpleNamespace(items=[])
+
+        class ProgressServer:
+            def send_progress_text(self, *_args, **_kwargs):
+                return None
+
+            def send_sync(self, *_args, **_kwargs):
+                return None
+
+        old_prompt_server = getattr(executor.PromptServer, "instance", None)
+        old_validate_request = executor.validate_seedance_request_size
+        executor.PromptServer.instance = ProgressServer()
+        executor.validate_seedance_request_size = lambda payload: validated.append(payload)
+        client = SimpleNamespace(
+            ark=SimpleNamespace(
+                content_generation=SimpleNamespace(tasks=Tasks())
+            )
+        )
+        try:
+            result = asyncio.run(
+                executor.JimengGenerationExecutor(client, "test-node").run_batch_tasks(
+                    model_name="doubao-seedance-2-5-260628",
+                    content=[{"type": "text", "text": "test"}],
+                    estimation_duration=30,
+                    resolution="720p",
+                    generation_count=1,
+                    non_blocking=True,
+                    non_blocking_cache_dict={},
+                    service_tier="flex",
+                    execution_expires_after=3600,
+                )
+            )
+        finally:
+            executor.validate_seedance_request_size = old_validate_request
+            if old_prompt_server is None:
+                delattr(executor.PromptServer, "instance")
+            else:
+                executor.PromptServer.instance = old_prompt_server
+
+        self.assertEqual(result["task_ids"], ["task-seedance25-1"])
+        self.assertEqual(submitted[0]["model"], "doubao-seedance-2-5-260628")
+        self.assertEqual(len(validated), 1)
+        self.assertNotIn("service_tier", submitted[0])
+        self.assertNotIn("execution_expires_after", submitted[0])
 
 
 class Seedream4PromptOptimizationTests(unittest.IsolatedAsyncioTestCase):
@@ -482,6 +615,89 @@ class Seedream5ProTests(unittest.IsolatedAsyncioTestCase):
                 nodes_image.JimengSeedream5.hidden = old_hidden
 
 
+class Seedance25ExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_seedance25_audio_only_uses_official_model(self):
+        captured = {}
+
+        async def fake_common(_self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return "ok"
+
+        def fake_append_audio(_self, content, _audio, role, max_duration):
+            content.append(
+                {
+                    "type": "audio_url",
+                    "audio_url": {"url": "data:audio/wav;base64,AA=="},
+                    "role": role,
+                }
+            )
+            self.assertEqual(max_duration, 30.2)
+            return 5.0, 4
+
+        old_common = nodes_video.JimengVideoBase._common_generation_logic
+        old_append_audio = nodes_video.JimengVideoBase._append_audio_content
+        old_hidden = getattr(nodes_video.JimengSeedance2, "hidden", None)
+        nodes_video.JimengVideoBase._common_generation_logic = fake_common
+        nodes_video.JimengVideoBase._append_audio_content = fake_append_audio
+        nodes_video.JimengSeedance2.hidden = SimpleNamespace(
+            unique_id="seedance25-test", prompt={}
+        )
+        try:
+            result = await nodes_video.JimengSeedance2.execute(
+                SimpleNamespace(),
+                {
+                    "model_version": "doubao-seedance-2-5",
+                    "prompt": "",
+                    "duration": 30,
+                    "auto_duration": False,
+                    "resolution": "720p",
+                    "aspect_ratio": "adaptive",
+                },
+                ref_audios=[object()],
+            )
+        finally:
+            nodes_video.JimengVideoBase._common_generation_logic = old_common
+            nodes_video.JimengVideoBase._append_audio_content = old_append_audio
+            if old_hidden is None:
+                delattr(nodes_video.JimengSeedance2, "hidden")
+            else:
+                nodes_video.JimengSeedance2.hidden = old_hidden
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(captured["args"][1], "")
+        self.assertEqual(captured["args"][2], 30)
+        self.assertEqual(
+            captured["kwargs"]["model_name"], "doubao-seedance-2-5-260628"
+        )
+        self.assertEqual(captured["kwargs"]["extra_api_params"]["generate_audio"], True)
+
+    async def test_seedance25_video_editing_requires_adaptive_auto_duration(self):
+        old_hidden = getattr(nodes_video.JimengSeedance2, "hidden", None)
+        nodes_video.JimengSeedance2.hidden = SimpleNamespace(
+            unique_id="seedance25-test", prompt={}
+        )
+        try:
+            with self.assertRaises(Exception):
+                await nodes_video.JimengSeedance2.execute(
+                    SimpleNamespace(),
+                    {
+                        "model_version": "doubao-seedance-2-5",
+                        "prompt": "edit",
+                        "duration": 5,
+                        "auto_duration": False,
+                        "resolution": "720p",
+                        "aspect_ratio": "16:9",
+                    },
+                    ref_videos=[object()],
+                )
+        finally:
+            if old_hidden is None:
+                delattr(nodes_video.JimengSeedance2, "hidden")
+            else:
+                nodes_video.JimengSeedance2.hidden = old_hidden
+
+
 class ReferenceVideoTests(unittest.TestCase):
     class FakeVideo:
         def __init__(self, fps=24, video_codec="h264", audio_codec="aac"):
@@ -531,6 +747,17 @@ class ReferenceVideoTests(unittest.TestCase):
                 self.FakeVideo(video_codec="", audio_codec="")
             ),
             5,
+        )
+
+    def test_seedance25_reference_video_duration_limit(self):
+        helper = nodes_video.JimengVideoBase()
+        long_video = self.FakeVideo()
+        long_video.get_duration = lambda: 25
+        with self.assertRaises(Exception):
+            helper._validate_single_reference_video(long_video)
+        self.assertEqual(
+            helper._validate_single_reference_video(long_video, max_duration=30.2),
+            25,
         )
 
 

@@ -275,6 +275,10 @@ const DYNAMIC_WIDGET_ZH_TOOLTIPS = {
     JimengSeedream5: {
         thinking: "开启后会在生成前优化提示词；Seedream 5 Pro 使用参考图时必须开启。",
     },
+    JimengSeedance2: {
+        resolution: "Seedance 2.5 支持 480p、720p；Seedance 2.0 标准版最高支持 4K。",
+        duration: "Seedance 2.5 支持 4–30 秒；Seedance 2.0 系列支持 4–15 秒。",
+    },
 };
 
 function getAutogrowLabelRules(node) {

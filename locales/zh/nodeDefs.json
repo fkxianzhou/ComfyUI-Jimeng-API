@@ -444,8 +444,8 @@
     }
   },
   "JimengSeedance2": {
-    "display_name": "视频生成（Seedance 2.0）",
-    "description": "使用 Seedance 2.0、Fast 或 Mini 生成和编辑视频；标准版最高支持 4K。",
+    "display_name": "视频生成（Seedance 2 / 2.5）",
+    "description": "使用 Seedance 2.0、Fast、Mini 或 2.5 生成和编辑视频；2.5 支持最长 30 秒及更多参考素材。",
     "inputs": {
       "client": {
         "name": "客户端",
@@ -453,7 +453,7 @@
       },
       "model_version": {
         "name": "模型版本",
-        "tooltip": "选择要使用的 Seedance 2.0 模型版本。"
+        "tooltip": "选择要使用的 Seedance 2.0 或 2.5 模型版本。"
       },
       "model_version_prompt": {
         "name": "提示词"
@@ -465,7 +465,8 @@
         "name": "种子"
       },
       "model_version_resolution": {
-        "name": "分辨率"
+        "name": "分辨率",
+        "tooltip": "Seedance 2.5 支持 480p、720p；Seedance 2.0 标准版最高支持 4K。"
       },
       "model_version_aspect_ratio": {
         "name": "宽高比"
@@ -474,7 +475,8 @@
         "name": "智能时长"
       },
       "model_version_duration": {
-        "name": "时长 (秒)"
+        "name": "时长 (秒)",
+        "tooltip": "Seedance 2.5 支持 4–30 秒；Seedance 2.0 系列支持 4–15 秒。"
       },
       "model_version_generate_audio": {
         "name": "生成音频"
@@ -508,7 +510,7 @@
       },
       "resolution": {
         "name": "分辨率",
-        "tooltip": "标准版支持 480p、720p、1080p、4K；Fast 和 Mini 支持 480p、720p。"
+        "tooltip": "Seedance 2.0 标准版支持 480p、720p、1080p、4K；Fast、Mini 和 Seedance 2.5 支持 480p、720p。"
       },
       "aspect_ratio": {
         "name": "宽高比",
@@ -520,7 +522,7 @@
       },
       "duration": {
         "name": "时长 (秒)",
-        "tooltip": "视频的期望时长。"
+        "tooltip": "视频的期望时长。Seedance 2.5 支持 4–30 秒，Seedance 2.0 系列支持 4–15 秒。"
       },
       "generate_audio": {
         "name": "生成音频",
@@ -556,7 +558,7 @@
       },
       "ref_image_1": {
         "name": "参考图像 1",
-        "tooltip": "用于多模态参考的图像。"
+        "tooltip": "用于多模态参考的图像。Seedance 2.5 最多支持 30 张，Seedance 2.0 系列最多支持 9 张。"
       },
       "ref_image_2": {
         "name": "参考图像 2",
@@ -592,7 +594,7 @@
       },
       "ref_video_1": {
         "name": "参考视频 1",
-        "tooltip": "用于多模态参考的视频。"
+        "tooltip": "用于多模态参考的视频。Seedance 2.5 最多支持 10 个，Seedance 2.0 系列最多支持 3 个。"
       },
       "ref_video_2": {
         "name": "参考视频 2",
@@ -604,7 +606,7 @@
       },
       "ref_audio_1": {
         "name": "参考音频 1",
-        "tooltip": "用于多模态参考的音频。"
+        "tooltip": "用于多模态参考的音频。Seedance 2.5 最多支持 10 个并允许纯音频参考；Seedance 2.0 系列最多支持 3 个且需搭配图片或视频。"
       },
       "ref_audio_2": {
         "name": "参考音频 2",

@@ -1,1 +1,193 @@
-{"id":"c6030a59-7432-4d9e-9c27-3a4587d93b75","revision":0,"last_node_id":35,"last_link_id":52,"nodes":[{"id":8,"type":"JimengVideoQueryTasks","pos":[930,380],"size":[270,250],"flags":{},"order":4,"mode":4,"inputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","link":7},{"localized_name":"页码","name":"page_num","type":"INT","widget":{"name":"page_num"},"link":null},{"localized_name":"每页数量","name":"page_size","type":"INT","widget":{"name":"page_size"},"link":null},{"localized_name":"任务状态","name":"status","type":"COMBO","widget":{"name":"status"},"link":null},{"localized_name":"服务等级","name":"service_tier","type":"COMBO","widget":{"name":"service_tier"},"link":null},{"localized_name":"任务ID","name":"task_ids","type":"STRING","widget":{"name":"task_ids"},"link":null},{"localized_name":"模型选择","name":"model_version","type":"COMBO","widget":{"name":"model_version"},"link":null},{"localized_name":"种子","name":"seed","type":"INT","widget":{"name":"seed"},"link":null}],"outputs":[{"localized_name":"查询结果","name":"task_list_json","type":"STRING","links":[9]},{"localized_name":"任务数量","name":"total_tasks","type":"INT","links":null}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"7ad8b1aaee36008de7aa83af43457c684ec40cb8","Node name for S&R":"JimengVideoQueryTasks"},"widgets_values":[1,10,"all","default","","all",0,"randomize"]},{"id":10,"type":"ShowText|pysssss","pos":[1220,380],"size":[400,250],"flags":{},"order":7,"mode":4,"inputs":[{"label":"文本","localized_name":"文本","name":"text","type":"STRING","link":9}],"outputs":[{"label":"字符串","localized_name":"字符串","name":"STRING","shape":6,"type":"STRING","links":null}],"title":"展示文本","properties":{"cnr_id":"comfyui-custom-scripts","ver":"f2838ed5e59de4d73cde5c98354b87a8d3200190","Node name for S&R":"ShowText|pysssss"},"widgets_values":[]},{"id":3,"type":"SaveVideo","pos":[620,380],"size":[270,110],"flags":{},"order":8,"mode":0,"inputs":[{"localized_name":"视频","name":"video","type":"VIDEO","link":47},{"localized_name":"文件名前缀","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null},{"localized_name":"格式","name":"format","type":"COMBO","widget":{"name":"format"},"link":null},{"localized_name":"编码器","name":"codec","type":"COMBO","widget":{"name":"codec"},"link":null}],"outputs":[],"properties":{"cnr_id":"comfy-core","ver":"0.8.2","Node name for S&R":"SaveVideo"},"widgets_values":["Jimeng/Video/Seedance1","auto","auto"]},{"id":5,"type":"SaveVideo","pos":[620,940],"size":[270,110],"flags":{},"order":9,"mode":4,"inputs":[{"localized_name":"视频","name":"video","type":"VIDEO","link":52},{"localized_name":"文件名前缀","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null},{"localized_name":"格式","name":"format","type":"COMBO","widget":{"name":"format"},"link":null},{"localized_name":"编码器","name":"codec","type":"COMBO","widget":{"name":"codec"},"link":null}],"outputs":[],"properties":{"cnr_id":"comfy-core","ver":"0.8.2","Node name for S&R":"SaveVideo"},"widgets_values":["Jimeng/Video/Seedance1","auto","auto"]},{"id":1,"type":"JimengAPIClient","pos":[-100,380],"size":[270,120],"flags":{},"order":0,"mode":0,"inputs":[{"localized_name":"API Key","name":"new_api_key","type":"STRING","widget":{"name":"new_api_key"},"link":null},{"localized_name":"保存名称 (可选)","name":"new_key_name","type":"STRING","widget":{"name":"new_key_name"},"link":null},{"localized_name":"密钥","name":"key_name","type":"COMBO","widget":{"name":"key_name"},"link":null}],"outputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","links":[7,48,49]}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"7ad8b1aaee36008de7aa83af43457c684ec40cb8","Node name for S&R":"JimengAPIClient"},"widgets_values":["","","Custom"]},{"id":30,"type":"LoadImage","pos":[-440,870],"size":[280,310],"flags":{},"order":1,"mode":4,"inputs":[{"localized_name":"图像","name":"image","type":"COMBO","widget":{"name":"image"},"link":null},{"localized_name":"选择文件上传","name":"upload","type":"IMAGEUPLOAD","widget":{"name":"upload"},"link":null}],"outputs":[{"localized_name":"图像","name":"IMAGE","type":"IMAGE","links":[45,50]},{"localized_name":"遮罩","name":"MASK","type":"MASK","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.3.52","Node name for S&R":"LoadImage"},"widgets_values":["comfyui_logo.png","image"]},{"id":29,"type":"LoadImage","pos":[-120,870],"size":[280,310],"flags":{},"order":2,"mode":4,"inputs":[{"localized_name":"图像","name":"image","type":"COMBO","widget":{"name":"image"},"link":null},{"localized_name":"选择文件上传","name":"upload","type":"IMAGEUPLOAD","widget":{"name":"upload"},"link":null}],"outputs":[{"localized_name":"图像","name":"IMAGE","type":"IMAGE","links":[46,51]},{"localized_name":"遮罩","name":"MASK","type":"MASK","links":null}],"properties":{"cnr_id":"comfy-core","ver":"0.3.52","Node name for S&R":"LoadImage"},"widgets_values":["comfyui_logo.png","image"]},{"id":34,"type":"JimengSeedance1","pos":[200,380],"size":[400,360],"flags":{},"order":5,"mode":0,"inputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","link":48},{"localized_name":"首帧图像","name":"image","shape":7,"type":"IMAGE","link":45},{"localized_name":"尾帧图像","name":"last_frame_image","shape":7,"type":"IMAGE","link":46},{"localized_name":"模型版本","name":"model_version","type":"COMBO","widget":{"name":"model_version"},"link":null},{"localized_name":"提示词","name":"prompt","type":"STRING","widget":{"name":"prompt"},"link":null},{"localized_name":"使用随机种子","name":"enable_random_seed","type":"BOOLEAN","widget":{"name":"enable_random_seed"},"link":null},{"localized_name":"种子","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"分辨率","name":"resolution","type":"COMBO","widget":{"name":"resolution"},"link":null},{"localized_name":"宽高比","name":"aspect_ratio","type":"COMBO","widget":{"name":"aspect_ratio"},"link":null},{"localized_name":"时长 (秒)","name":"duration","type":"FLOAT","widget":{"name":"duration"},"link":null},{"localized_name":"固定镜头","name":"camerafixed","type":"BOOLEAN","widget":{"name":"camerafixed"},"link":null},{"localized_name":"离线推理模式","name":"enable_offline_inference","type":"BOOLEAN","widget":{"name":"enable_offline_inference"},"link":null},{"localized_name":"生成数量","name":"generation_count","type":"INT","widget":{"name":"generation_count"},"link":null},{"localized_name":"文件名前缀","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null},{"localized_name":"保存尾帧","name":"save_last_frame_batch","type":"BOOLEAN","widget":{"name":"save_last_frame_batch"},"link":null},{"localized_name":"非阻塞模式","name":"non_blocking","type":"BOOLEAN","widget":{"name":"non_blocking"},"link":null}],"outputs":[{"localized_name":"视频","name":"video","type":"VIDEO","links":[47]},{"localized_name":"最后一帧","name":"last_frame","type":"IMAGE","links":null},{"localized_name":"响应","name":"response","type":"STRING","links":null}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"e6a3fe5fe52f1f62c52746fbb7e6059a4ec034f9","Node name for S&R":"JimengSeedance1"},"widgets_values":["doubao-seedance-1-0-pro","",true,0,"randomize","720p","adaptive",5,true,false,1,"Jimeng/Video/Batch/Seedance",false,false]},{"id":35,"type":"JimengSeedance1_5","pos":[200,940],"size":[400,430],"flags":{},"order":6,"mode":4,"inputs":[{"localized_name":"客户端","name":"client","type":"JIMENG_CLIENT","link":49},{"localized_name":"首帧图像","name":"image","shape":7,"type":"IMAGE","link":50},{"localized_name":"尾帧图像","name":"last_frame_image","shape":7,"type":"IMAGE","link":51},{"localized_name":"模型版本","name":"model_version","type":"COMBO","widget":{"name":"model_version"},"link":null},{"localized_name":"提示词","name":"prompt","type":"STRING","widget":{"name":"prompt"},"link":null},{"localized_name":"使用随机种子","name":"enable_random_seed","type":"BOOLEAN","widget":{"name":"enable_random_seed"},"link":null},{"localized_name":"种子","name":"seed","type":"INT","widget":{"name":"seed"},"link":null},{"localized_name":"分辨率","name":"resolution","type":"COMBO","widget":{"name":"resolution"},"link":null},{"localized_name":"宽高比","name":"aspect_ratio","type":"COMBO","widget":{"name":"aspect_ratio"},"link":null},{"localized_name":"智能时长","name":"auto_duration","type":"BOOLEAN","widget":{"name":"auto_duration"},"link":null},{"localized_name":"时长 (秒)","name":"duration","type":"INT","widget":{"name":"duration"},"link":null},{"localized_name":"生成音频","name":"generate_audio","type":"BOOLEAN","widget":{"name":"generate_audio"},"link":null},{"localized_name":"启用 Draft 样片模式","name":"draft_mode","type":"BOOLEAN","widget":{"name":"draft_mode"},"link":null},{"localized_name":"复用上次样片任务 ID","name":"reuse_last_draft_task","type":"BOOLEAN","widget":{"name":"reuse_last_draft_task"},"link":null},{"localized_name":"样片任务 ID","name":"draft_task_id","type":"STRING","widget":{"name":"draft_task_id"},"link":null},{"localized_name":"固定镜头","name":"camerafixed","type":"BOOLEAN","widget":{"name":"camerafixed"},"link":null},{"localized_name":"离线推理模式","name":"enable_offline_inference","type":"BOOLEAN","widget":{"name":"enable_offline_inference"},"link":null},{"localized_name":"生成数量","name":"generation_count","type":"INT","widget":{"name":"generation_count"},"link":null},{"localized_name":"文件名前缀","name":"filename_prefix","type":"STRING","widget":{"name":"filename_prefix"},"link":null},{"localized_name":"保存尾帧","name":"save_last_frame_batch","type":"BOOLEAN","widget":{"name":"save_last_frame_batch"},"link":null},{"localized_name":"非阻塞模式","name":"non_blocking","type":"BOOLEAN","widget":{"name":"non_blocking"},"link":null}],"outputs":[{"localized_name":"视频","name":"video","type":"VIDEO","links":[52]},{"localized_name":"最后一帧","name":"last_frame","type":"IMAGE","links":null},{"localized_name":"响应","name":"response","type":"STRING","links":null}],"properties":{"cnr_id":"ComfyUI-Jimeng-API","ver":"e6a3fe5fe52f1f62c52746fbb7e6059a4ec034f9","Node name for S&R":"JimengSeedance1_5"},"widgets_values":["doubao-seedance-1.5-pro","",true,0,"randomize","720p","adaptive",false,5,true,false,false,"",true,false,1,"Jimeng/Video/Batch/Seedance",false,false]},{"id":18,"type":"Fast Groups Bypasser (rgthree)","pos":[-40,560],"size":[210,230],"flags":{},"order":3,"mode":0,"inputs":[],"outputs":[{"label":"可选连接","name":"OPT_CONNECTION","type":"*","links":null}],"properties":{"matchColors":"","matchTitle":"","showNav":true,"showAllGraphs":true,"sort":"position","customSortAlphabet":"","toggleRestriction":"default"}}],"links":[[7,1,0,8,0,"JIMENG_CLIENT"],[9,8,0,10,0,"STRING"],[45,30,0,34,1,"IMAGE"],[46,29,0,34,2,"IMAGE"],[47,34,0,3,0,"VIDEO"],[48,1,0,34,0,"JIMENG_CLIENT"],[49,1,0,35,0,"JIMENG_CLIENT"],[50,30,0,35,1,"IMAGE"],[51,29,0,35,2,"IMAGE"],[52,35,0,5,0,"VIDEO"]],"groups":[{"id":1,"title":"Seedance 1.0","bounding":[190,310,710,540],"color":"#3f789e","font_size":24,"flags":{}},{"id":2,"title":"Seedance 1.5 Pro","bounding":[190,870,710,660],"color":"#3f789e","font_size":24,"flags":{}},{"id":4,"title":"任务查询","bounding":[920,310,710,330],"color":"#3f789e","font_size":24,"flags":{}},{"id":5,"title":"首帧图片","bounding":[-450,800,300,393.6],"color":"#3f789e","font_size":24,"flags":{}},{"id":6,"title":"尾帧图片","bounding":[-130,800,300,390],"color":"#3f789e","font_size":24,"flags":{}}],"config":{},"extra":{"ds":{"scale":0.7400200741323036,"offset":[956.4716516733758,-188.40891993423287]},"workflowRendererVersion":"LG"},"version":0.4}
+{
+  "id": "7f1f70c4-4e61-49be-96d1-2e3f1c490006",
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 8,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "JimengAPIClient",
+      "pos": [20, 80],
+      "size": [300, 130],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {"name": "new_api_key", "type": "STRING", "widget": {"name": "new_api_key"}, "link": null},
+        {"name": "new_key_name", "type": "STRING", "widget": {"name": "new_key_name"}, "link": null},
+        {"name": "key_name", "type": "COMBO", "widget": {"name": "key_name"}, "link": null}
+      ],
+      "outputs": [{"name": "client", "type": "JIMENG_CLIENT", "links": [1, 2]}],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengAPIClient"},
+      "widgets_values": ["", "", "Custom"]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [20, 300],
+      "size": [300, 320],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "COMBO", "widget": {"name": "image"}, "link": null},
+        {"name": "upload", "type": "IMAGEUPLOAD", "widget": {"name": "upload"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [3, 4]},
+        {"name": "MASK", "type": "MASK", "links": null}
+      ],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.33.2", "Node name for S&R": "LoadImage"},
+      "widgets_values": ["comfyui_logo.png", "image"]
+    },
+    {
+      "id": 3,
+      "type": "JimengSeedance1",
+      "pos": [390, 80],
+      "size": [440, 560],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "client", "type": "JIMENG_CLIENT", "link": 1},
+        {"name": "model_version", "type": "COMBO", "widget": {"name": "model_version"}, "link": null},
+        {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}, "link": null},
+        {"name": "enable_random_seed", "type": "BOOLEAN", "widget": {"name": "enable_random_seed"}, "link": null},
+        {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": null},
+        {"name": "resolution", "type": "COMBO", "widget": {"name": "resolution"}, "link": null},
+        {"name": "aspect_ratio", "type": "COMBO", "widget": {"name": "aspect_ratio"}, "link": null},
+        {"name": "duration", "type": "FLOAT", "widget": {"name": "duration"}, "link": null},
+        {"name": "camerafixed", "type": "BOOLEAN", "widget": {"name": "camerafixed"}, "link": null},
+        {"name": "enable_offline_inference", "type": "BOOLEAN", "widget": {"name": "enable_offline_inference"}, "link": null},
+        {"name": "generation_count", "type": "INT", "widget": {"name": "generation_count"}, "link": null},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null},
+        {"name": "save_last_frame_batch", "type": "BOOLEAN", "widget": {"name": "save_last_frame_batch"}, "link": null},
+        {"name": "non_blocking", "type": "BOOLEAN", "widget": {"name": "non_blocking"}, "link": null},
+        {"name": "image", "type": "IMAGE", "shape": 7, "link": 3},
+        {"name": "last_frame_image", "type": "IMAGE", "shape": 7, "link": null}
+      ],
+      "outputs": [
+        {"name": "video", "type": "VIDEO", "links": [5]},
+        {"name": "last_frame", "type": "IMAGE", "links": null},
+        {"name": "response", "type": "STRING", "links": null}
+      ],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengSeedance1"},
+      "widgets_values": ["doubao-seedance-1-0-pro", "", true, 0, "randomize", "720p", "adaptive", 5, true, false, 1, "Jimeng/Video/Batch/Seedance", false, false]
+    },
+    {
+      "id": 4,
+      "type": "SaveVideo",
+      "pos": [900, 80],
+      "size": [300, 130],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "video", "type": "VIDEO", "link": 5},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null},
+        {"name": "format", "type": "COMBO", "widget": {"name": "format"}, "link": null},
+        {"name": "codec", "type": "COMBO", "widget": {"name": "codec"}, "link": null}
+      ],
+      "outputs": [],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.33.2", "Node name for S&R": "SaveVideo"},
+      "widgets_values": ["Jimeng/Video/Seedance1", "auto", "auto"]
+    },
+    {
+      "id": 5,
+      "type": "JimengSeedance1_5",
+      "pos": [390, 720],
+      "size": [440, 700],
+      "flags": {},
+      "order": 4,
+      "mode": 4,
+      "inputs": [
+        {"name": "client", "type": "JIMENG_CLIENT", "link": 2},
+        {"name": "model_version", "type": "COMBO", "widget": {"name": "model_version"}, "link": null},
+        {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}, "link": null},
+        {"name": "enable_random_seed", "type": "BOOLEAN", "widget": {"name": "enable_random_seed"}, "link": null},
+        {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": null},
+        {"name": "resolution", "type": "COMBO", "widget": {"name": "resolution"}, "link": null},
+        {"name": "aspect_ratio", "type": "COMBO", "widget": {"name": "aspect_ratio"}, "link": null},
+        {"name": "auto_duration", "type": "BOOLEAN", "widget": {"name": "auto_duration"}, "link": null},
+        {"name": "duration", "type": "INT", "widget": {"name": "duration"}, "link": null},
+        {"name": "generate_audio", "type": "BOOLEAN", "widget": {"name": "generate_audio"}, "link": null},
+        {"name": "draft_mode", "type": "BOOLEAN", "widget": {"name": "draft_mode"}, "link": null},
+        {"name": "reuse_last_draft_task", "type": "BOOLEAN", "widget": {"name": "reuse_last_draft_task"}, "link": null},
+        {"name": "draft_task_id", "type": "STRING", "widget": {"name": "draft_task_id"}, "link": null},
+        {"name": "camerafixed", "type": "BOOLEAN", "widget": {"name": "camerafixed"}, "link": null},
+        {"name": "enable_offline_inference", "type": "BOOLEAN", "widget": {"name": "enable_offline_inference"}, "link": null},
+        {"name": "generation_count", "type": "INT", "widget": {"name": "generation_count"}, "link": null},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null},
+        {"name": "save_last_frame_batch", "type": "BOOLEAN", "widget": {"name": "save_last_frame_batch"}, "link": null},
+        {"name": "non_blocking", "type": "BOOLEAN", "widget": {"name": "non_blocking"}, "link": null},
+        {"name": "image", "type": "IMAGE", "shape": 7, "link": 4},
+        {"name": "last_frame_image", "type": "IMAGE", "shape": 7, "link": null}
+      ],
+      "outputs": [
+        {"name": "video", "type": "VIDEO", "links": [6]},
+        {"name": "last_frame", "type": "IMAGE", "links": null},
+        {"name": "response", "type": "STRING", "links": null}
+      ],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengSeedance1_5"},
+      "widgets_values": ["doubao-seedance-1.5-pro", "", true, 0, "randomize", "720p", "adaptive", false, 5, true, false, false, "", true, false, 1, "Jimeng/Video/Batch/Seedance", false, false]
+    },
+    {
+      "id": 6,
+      "type": "SaveVideo",
+      "pos": [900, 720],
+      "size": [300, 130],
+      "flags": {},
+      "order": 5,
+      "mode": 4,
+      "inputs": [
+        {"name": "video", "type": "VIDEO", "link": 6},
+        {"name": "filename_prefix", "type": "STRING", "widget": {"name": "filename_prefix"}, "link": null},
+        {"name": "format", "type": "COMBO", "widget": {"name": "format"}, "link": null},
+        {"name": "codec", "type": "COMBO", "widget": {"name": "codec"}, "link": null}
+      ],
+      "outputs": [],
+      "properties": {"cnr_id": "comfy-core", "ver": "0.33.2", "Node name for S&R": "SaveVideo"},
+      "widgets_values": ["Jimeng/Video/Seedance1_5", "auto", "auto"]
+    },
+    {
+      "id": 7,
+      "type": "JimengVideoQueryTasks",
+      "pos": [900, 980],
+      "size": [350, 300],
+      "flags": {},
+      "order": 6,
+      "mode": 4,
+      "inputs": [
+        {"name": "client", "type": "JIMENG_CLIENT", "link": null},
+        {"name": "page_num", "type": "INT", "widget": {"name": "page_num"}, "link": null},
+        {"name": "page_size", "type": "INT", "widget": {"name": "page_size"}, "link": null},
+        {"name": "status", "type": "COMBO", "widget": {"name": "status"}, "link": null},
+        {"name": "service_tier", "type": "COMBO", "widget": {"name": "service_tier"}, "link": null},
+        {"name": "task_ids", "type": "STRING", "widget": {"name": "task_ids"}, "link": null},
+        {"name": "model_version", "type": "COMBO", "widget": {"name": "model_version"}, "link": null},
+        {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": null}
+      ],
+      "outputs": [
+        {"name": "task_list_json", "type": "STRING", "links": null},
+        {"name": "total_tasks", "type": "INT", "links": null}
+      ],
+      "properties": {"cnr_id": "ComfyUI-Jimeng-API", "ver": "2.5.0", "Node name for S&R": "JimengVideoQueryTasks"},
+      "widgets_values": [1, 10, "all", "default", "", "all", 0, "randomize"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "JIMENG_CLIENT"],
+    [2, 1, 0, 5, 0, "JIMENG_CLIENT"],
+    [3, 2, 0, 3, 14, "IMAGE"],
+    [4, 2, 0, 5, 19, "IMAGE"],
+    [5, 3, 0, 4, 0, "VIDEO"],
+    [6, 5, 0, 6, 0, "VIDEO"]
+  ],
+  "groups": [
+    {"id": 1, "title": "Seedance 1.0", "bounding": [360, 20, 880, 650], "color": "#3f789e", "font_size": 22, "flags": {}},
+    {"id": 2, "title": "Seedance 1.5 Pro（按需启用）", "bounding": [360, 660, 920, 790], "color": "#3f789e", "font_size": 22, "flags": {}}
+  ],
+  "config": {},
+  "extra": {"ds": {"scale": 0.78, "offset": [90, 50]}},
+  "version": 0.4
+}

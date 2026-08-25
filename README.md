@@ -6,7 +6,7 @@
 
 本项目为 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 提供了火山方舟的视觉模型（即梦/豆包） API 节点。用户可以通过这些节点在 ComfyUI 中使用多种图像生成和视频生成功能。
 
-- 项目已支持 `Seedance 2.0`、`Seedance 2.0 Fast` 与 `Seedance 2.0 Mini`，标准版最高支持 4K。
+- 项目已支持 `Seedance 2.0`、`Seedance 2.0 Fast`、`Seedance 2.0 Mini` 与 `Seedance 2.5`；2.0 标准版最高支持 4K，2.5 最长支持 30 秒。
 - 如在使用过程中遇到问题，请通过 [ISSUES](https://github.com/fkxianzhou/ComfyUI-Jimeng-API/issues) 反馈。
 - Classic Canvas 与 Nodes 2.0（Vue）均受支持，最低支持 ComfyUI `0.25.1`。
 
@@ -57,7 +57,7 @@
 - **视频生成**:
   - `视频生成（Seedance 1.0）`: 核心视频生成节点，支持文生视频、图生视频（首/尾帧）。
   - `视频生成（Seedance 1.5 Pro）`: 支持**音频生成**和**智能时长**的高级视频生成节点。
-  - `视频生成（Seedance 2.0）`: 支持**图片/视频/音频多模态参考**、**视频编辑/延长**与**联网搜索增强**。
+  - `视频生成（Seedance 2 / 2.5）`: 支持**图片/视频/音频多模态参考**、**视频编辑/延长**与**联网搜索增强**。
   - `视频生成（参考图生视频）`: 根据 1-4 张**参考图像**生成视频。
   - `视频生成任务列表查询`: 用于查询和管理在 API 上运行的任务历史。
 - **视觉理解**:
@@ -88,8 +88,7 @@
 允许为当前客户端设置图像（张数）和视频（Tokens）的使用上限。
 
 - **特性**: 当达到限额时自动停止任务并抛出提示，防止额度超支。
-- **示例工作流**:
-  ![Quota Settings Workflow](./example_workflows/QuotaSettings.jpg)
+- **标准工作流**: [QuotaSettings.json](./example_workflows/QuotaSettings.json)
 
 ***
 
@@ -101,8 +100,7 @@
 - **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
 - **提示词优化**: Seedream 4.0 可通过开关启用；Seedream 4.5 不发送此参数。
 
-**示例工作流**:
-![Seedream 4 Workflow](./example_workflows/Seedream%204.jpg)
+**标准工作流**: [Seedream 4.json](./example_workflows/Seedream%204.json)
 
 ***
 
@@ -114,8 +112,7 @@
 - **Lite**: 保留流式 Base64、组图生成、联网搜索与种子功能。
 - **自定义尺寸**: Pro 要求宽高为 16 的倍数、比例在 1:16–16:1、总像素为 921600–4194304。
 
-**示例工作流**:
-![Seedream 5 Workflow](./example_workflows/Seedream%205.jpg)
+**标准工作流**: [Seedream 5.json](./example_workflows/Seedream%205.json)
 
 ***
 
@@ -123,20 +120,20 @@
 
 支持文生视频与首/尾帧图生视频；在 1.0 能力基础上，1.5 Pro 支持**音效生成**与**智能时长**控制。
 
-**示例工作流**:
-![Seedance 1 Workflow](./example_workflows/Seedance%201.jpg)
+**标准工作流**: [Seedance 1.json](./example_workflows/Seedance%201.json)
 
-### `视频生成（Seedance 2.0）`
+### `视频生成（Seedance 2 / 2.5）`
 
-支持最多 **9 张参考图 + 3 段参考视频 + 3 段参考音频**，可覆盖文生视频、多模态参考生视频、视频编辑、视频延长与联网搜索增强。
+可覆盖文生视频、多模态参考生视频、视频编辑、视频延长与联网搜索增强。
 
-- **标准版**: 480p / 720p / 1080p / 4K。
-- **Fast、Mini**: 480p / 720p。
+- **Seedance 2.5**: 480p / 720p、4–30 秒；最多 30 张参考图、10 段参考视频和 10 段参考音频，并允许纯音频参考。
+- **Seedance 2.0 标准版**: 480p / 720p / 1080p / 4K、4–15 秒；最多 9 张参考图、3 段参考视频和 3 段参考音频。
+- **Seedance 2.0 Fast、Mini**: 480p / 720p、4–15 秒；参考数量限制与 2.0 标准版相同。
 - **参考视频**: 最大 200 MB、409600–8295044 像素、24–60 FPS；可识别编码元数据时要求 H.264/H.265 视频与 AAC/MP3 音频。
+- **参考媒体时长**: Seedance 2.5 单个及同类素材总时长上限为 30.2 秒；Seedance 2.0 系列为 15.2 秒。
 - **请求大小**: 最终紧凑 UTF-8 JSON 请求体不得超过 64 MiB。
 
-**示例工作流**:
-![Seedance 2 Workflow](./example_workflows/Seedance%202.jpg)
+**标准工作流**: [Seedance 2.json](./example_workflows/Seedance%202.json)
 
 ***
 
@@ -154,14 +151,13 @@
 - **多轮对话**: 支持开启多轮对话模式，保持上下文。
 - **深度思考**: 支持开启深度思考模式，提升复杂问题的推理能力。
 
-**示例工作流**:
-![Visual Understanding Workflow](./example_workflows/VisualUnderstanding.jpg)
+**标准工作流**: [VisualUnderstanding.json](./example_workflows/VisualUnderstanding.json)
 
 ## 📓 示例工作流
 
 您可以在 `example_workflows` 目录中找到所有节点的示例工作流。
 
-`2.4 Model Updates.json` 同时展示 Seedream 5 Pro、Seedance 2 标准版 4K 与 Seed 2.1 Pro；现有 Seedream 5 / Seedance 2 工作流保留为旧版平铺参数迁移样例。
+所有 JSON 工作流模板均已按项目 `2.5.0` 的当前节点结构重建，不再依赖第三方分组或文本展示节点。`2.5 Model Updates.json` 同时展示 Seedream 5 Pro、Seedance 2.5 与 Seed 2.1 Pro；`Seedance 2.json` 保留 Seedance 2.0 默认配置，并可直接切换到 2.5。
 
 ## 🧩 ComfyUI 兼容性
 
