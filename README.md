@@ -20,10 +20,10 @@
 
 方式1：  **克隆仓库**:
 打开终端，`cd` 到 ComfyUI 的 `custom_nodes` 目录，运行：
-`bash
-    git clone https://github.com/fkxianzhou/ComfyUI-Jimeng-API
-    `
-&#x20;  &#x20;
+
+```bash
+git clone https://github.com/fkxianzhou/ComfyUI-Jimeng-API
+```
 
 方式2： **使用ComfyUI Manager下载**。
 
@@ -63,17 +63,6 @@
 - **视觉理解**:
   - `视觉理解（Visual Understanding）`: 默认使用 Seed 2.1 Pro，并保留 Seed 2.0 Pro/Lite/Mini 兼容旧工作流。
 
-## ⚠️ 模型下线与节点弃用说明
-
-火山方舟平台会随着模型迭代逐步下线旧版本模型。目前`doubao-seedream-3-0` 与 `doubao-seedance-1-0-lite` 已进入下线流程，平台将逐步下调配额并在到期后完成服务下线与替换。
-
-- **已标记为即将弃用**:
-  - `图像生成（Seedream 3）`（对应模型：doubao-seedream-3-0）
-  - `视频生成（参考图生视频）`（对应模型：doubao-seedance-1-0-lite）
-- **建议使用新节点**:
-  - `图像生成（Seedream 3）` → `图像生成（Seedream 5）`
-  - `视频生成（参考图生视频）` → `视频生成（Seedance 2.0）`
-
 ## 📑 节点详解
 
 ### `火山方舟 API 客户端 (Jimeng API Client)`
@@ -88,7 +77,9 @@
 允许为当前客户端设置图像（张数）和视频（Tokens）的使用上限。
 
 - **特性**: 当达到限额时自动停止任务并抛出提示，防止额度超支。
-- **标准工作流**: [QuotaSettings.json](./example_workflows/QuotaSettings.json)
+- **示例工作流**（点击预览图打开 JSON）：
+
+  [![Quota Settings Workflow](./example_workflows/QuotaSettings.jpg)](./example_workflows/QuotaSettings.json)
 
 ***
 
@@ -100,7 +91,9 @@
 - **启用组图生成**: 开启后可一次性生成多张内容关联的图片。
 - **提示词优化**: Seedream 4.0 可通过开关启用；Seedream 4.5 不发送此参数。
 
-**标准工作流**: [Seedream 4.json](./example_workflows/Seedream%204.json)
+**示例工作流**（点击预览图打开 JSON）：
+
+[![Seedream 4 Workflow](./example_workflows/Seedream%204.jpg)](./example_workflows/Seedream%204.json)
 
 ***
 
@@ -112,7 +105,9 @@
 - **Lite**: 保留流式 Base64、组图生成、联网搜索与种子功能。
 - **自定义尺寸**: Pro 要求宽高为 16 的倍数、比例在 1:16–16:1、总像素为 921600–4194304。
 
-**标准工作流**: [Seedream 5.json](./example_workflows/Seedream%205.json)
+**示例工作流**（点击预览图打开 JSON）：
+
+[![Seedream 5 Workflow](./example_workflows/Seedream%205.jpg)](./example_workflows/Seedream%205.json)
 
 ***
 
@@ -120,7 +115,9 @@
 
 支持文生视频与首/尾帧图生视频；在 1.0 能力基础上，1.5 Pro 支持**音效生成**与**智能时长**控制。
 
-**标准工作流**: [Seedance 1.json](./example_workflows/Seedance%201.json)
+**示例工作流**（点击预览图打开 JSON）：
+
+[![Seedance 1 Workflow](./example_workflows/Seedance%201.jpg)](./example_workflows/Seedance%201.json)
 
 ### `视频生成（Seedance 2 / 2.5）`
 
@@ -133,7 +130,9 @@
 - **参考媒体时长**: Seedance 2.5 单个及同类素材总时长上限为 30.2 秒；Seedance 2.0 系列为 15.2 秒。
 - **请求大小**: 最终紧凑 UTF-8 JSON 请求体不得超过 64 MiB。
 
-**标准工作流**: [Seedance 2.json](./example_workflows/Seedance%202.json)
+**示例工作流**（点击预览图打开 JSON）：
+
+[![Seedance 2 Workflow](./example_workflows/Seedance%202.jpg)](./example_workflows/Seedance%202.json)
 
 ***
 
@@ -151,13 +150,13 @@
 - **多轮对话**: 支持开启多轮对话模式，保持上下文。
 - **深度思考**: 支持开启深度思考模式，提升复杂问题的推理能力。
 
-**标准工作流**: [VisualUnderstanding.json](./example_workflows/VisualUnderstanding.json)
+**示例工作流**（点击预览图打开 JSON）：
+
+[![Visual Understanding Workflow](./example_workflows/VisualUnderstanding.jpg)](./example_workflows/VisualUnderstanding.json)
 
 ## 📓 示例工作流
 
 您可以在 `example_workflows` 目录中找到所有节点的示例工作流。
-
-所有 JSON 工作流模板均已按项目 `2.5.0` 的当前节点结构重建，不再依赖第三方分组或文本展示节点。`2.5 Model Updates.json` 同时展示 Seedream 5 Pro、Seedance 2.5 与 Seed 2.1 Pro；`Seedance 2.json` 保留 Seedance 2.0 默认配置，并可直接切换到 2.5。
 
 ## 🧩 ComfyUI 兼容性
 
@@ -166,5 +165,3 @@
 | 0.25.1 / 1.45.15 | 支持 | 支持 | 最低支持版本；包含旧平铺工作流迁移 |
 | 0.28.0 / 1.45.21 | 支持 | 支持 | 官方稳定分支目标 |
 | 前端 1.46.3+ | 支持 | 支持 | 已覆盖 DynamicCombo 保存与恢复路径 |
-
-模型相关字段使用 ComfyUI 原生 V3 `DynamicCombo`。Vue 下的依赖控件保持可见并在不适用时禁用；Classic Canvas 继续使用紧凑显隐布局。阻塞视频任务同时发送原生进度状态与低版本兼容事件，非阻塞任务只显示提交状态和任务 ID。
